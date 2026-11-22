@@ -6,25 +6,25 @@ public struct MainWindowView: View {
     @ObservedObject var scanner = FileScannerService.shared
     @ObservedObject var trashService = SafetyTrashService.shared
     @ObservedObject var cpuMonitor = CPUMonitorService.shared
+    @ObservedObject var localLLM = LocalLLMService.shared
 
     @State private var searchText: String = ""
     @State private var filterLevel: VitalityLevel? = nil
     @State private var showingTrashAlert: Bool = false
-    @State private var isAiAnalyzing: Bool = false
     @State private var statusAlertMessage: String? = nil
 
     public init() {}
 
     public var body: some View {
         HStack(spacing: 0) {
-            // MARK: - 1. Left Sidebar
+            // MARK: - 1. Left Retro Chassis Sidebar
             sidebarView
-                .frame(width: 260)
-                .background(Color(NSColor.windowBackgroundColor).opacity(0.85))
+                .frame(width: 250)
+                .background(RetroTheme.panel)
 
-            Divider()
+            Divider().background(RetroTheme.border)
 
-            // MARK: - 2. Content Area (Center + Right or Full Pane)
+            // MARK: - 2. Main Workstation Area
             Group {
                 switch windowManager.selectedNav {
                 case .dashboard:
@@ -41,9 +41,12 @@ public struct MainWindowView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(RetroTheme.bg)
         }
-        .frame(minWidth: 1040, minHeight: 680)
+        .frame(minWidth: 1080, minHeight: 700)
+        .background(RetroTheme.bg)
         .onAppear {
+            localLLM.checkModelStatus()
             if scanner.itemsByCategory.isEmpty && !scanner.isScanning {
                 Task {
                     await scanner.scanQuickCleanDashboard()
@@ -56,23 +59,21 @@ public struct MainWindowView: View {
         .alert(isPresented: $showingTrashAlert) {
             let info = scanner.getSelectedCountAndBytes()
             return Alert(
-                title: Text("Move Selected Items to Trash?"),
-                message: Text("Crucial will safely move \(info.count) files (\(ByteCountFormatter.string(fromByteCount: info.bytes, countStyle: .file))) to your macOS Trash. You can restore them anytime."),
-                primaryButton: .destructive(Text("Move to Trash")) {
+                title: Text("AUTHORIZE PURGE OPERATION"),
+                message: Text("Crucial will stage \(info.count) files (\(ByteCountFormatter.string(fromByteCount: info.bytes, countStyle: .file))) into your macOS Trash. Zero destructive commands will be run; items remain restorable."),
+                primaryButton: .destructive(Text("EXECUTE PURGE")) {
                     let result = scanner.cleanSelected()
-                    statusAlertMessage = "Safely moved \(result.succeeded) items to Trash (\(ByteCountFormatter.string(fromByteCount: result.bytesFreed, countStyle: .file)) freed)."
+                    statusAlertMessage = "Safely staged \(result.succeeded) items to Trash (\(ByteCountFormatter.string(fromByteCount: result.bytesFreed, countStyle: .file)) reclaimed)."
                 },
-                secondaryButton: .cancel()
+                secondaryButton: .cancel(Text("CANCEL"))
             )
         }
     }
 
-    // MARK: - Auto-select helper
     private func autoSelectFirstItem() {
         if case .category(let cat) = windowManager.selectedNav {
             windowManager.selectedItem = scanner.itemsByCategory[cat]?.first
         } else {
-            // First item from any category
             for cat in JunkCategory.allCases {
                 if let first = scanner.itemsByCategory[cat]?.first {
                     windowManager.selectedItem = first
@@ -82,72 +83,59 @@ public struct MainWindowView: View {
         }
     }
 
-    // MARK: - Sidebar View
+    // MARK: - Sidebar View (Industrial Chassis)
     private var sidebarView: some View {
         VStack(spacing: 0) {
-            // App Branding Header
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(
-                            LinearGradient(
-                                colors: [.blue, .purple, .pink],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 36, height: 36)
-                        .shadow(color: .purple.opacity(0.4), radius: 6, x: 0, y: 2)
+            // Retro Chassis Brand Header
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(RetroTheme.panelRaised)
+                            .frame(width: 26, height: 26)
+                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(RetroTheme.borderLight, lineWidth: 1))
 
-                    Image(systemName: "bolt.shield.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("Crucial")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                        Text("v1.0")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.15))
-                            .cornerRadius(4)
+                        Image(systemName: "bolt.shield.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(RetroTheme.amber)
                     }
-                    Text("Mac Junk Cleaner & Vitality")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("CRUCIAL // SYS_RECLAIM")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textPrimary)
+                        Text("TELEMETRY: VERIFIED // V1.0")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.amber)
+                    }
+                    Spacer()
                 }
-                Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
 
-            Divider()
+            Divider().background(RetroTheme.border)
 
-            // Storage Gauge Card
-            diskGaugeCard
-                .padding(14)
+            // Storage Gauge Block
+            diskTelemetryBlock
+                .padding(12)
 
-            Divider()
+            Divider().background(RetroTheme.border)
 
-            // Navigation Menu
+            // Navigation Sections
             ScrollView {
-                VStack(spacing: 4) {
+                VStack(spacing: 3) {
                     sidebarNavRow(
-                        title: "Dashboard",
-                        icon: "gauge.with.needle.fill",
-                        color: .blue,
+                        title: "DASHBOARD // OVERVIEW",
+                        icon: "gauge.with.needle",
+                        accentColor: RetroTheme.cyan,
                         isSelected: windowManager.selectedNav == .dashboard
                     ) {
                         windowManager.selectedNav = .dashboard
                     }
 
-                    sidebarSectionTitle("CLEANABLE CATEGORIES")
-                        .padding(.top, 8)
+                    sidebarSectionTitle("DISPOSABLE SECTORS")
 
                     ForEach(JunkCategory.allCases.filter { $0 != .custom }) { cat in
                         let items = scanner.itemsByCategory[cat] ?? []
@@ -167,73 +155,77 @@ public struct MainWindowView: View {
                         }
                     }
 
-                    sidebarSectionTitle("TOOLS & SETTINGS")
-                        .padding(.top, 8)
+                    sidebarSectionTitle("INSTRUMENTATION & AI")
 
                     sidebarNavRow(
-                        title: "Crucial Assistant",
-                        icon: "bubble.left.and.sparkles.fill",
-                        color: .purple,
+                        title: "CRUCIAL ASSISTANT [LLM]",
+                        icon: "terminal.fill",
+                        accentColor: RetroTheme.amber,
                         isSelected: windowManager.selectedNav == .assistant
                     ) {
                         windowManager.selectedNav = .assistant
                     }
 
                     sidebarNavRow(
-                        title: "Deep File Finder",
+                        title: "DEEP FILE FINDER",
                         icon: "magnifyingglass",
-                        color: .green,
+                        accentColor: RetroTheme.cyan,
                         isSelected: windowManager.selectedNav == .fileFinder
                     ) {
                         windowManager.selectedNav = .fileFinder
                     }
 
                     sidebarNavRow(
-                        title: "Settings & System",
-                        icon: "gearshape.fill",
-                        color: .gray,
+                        title: "SYSTEM SETTINGS",
+                        icon: "gearshape.2.fill",
+                        accentColor: RetroTheme.textMuted,
                         isSelected: windowManager.selectedNav == .settings
                     ) {
                         windowManager.selectedNav = .settings
                     }
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
                 .padding(.vertical, 8)
             }
 
-            Divider()
+            Divider().background(RetroTheme.border)
 
             // Bottom Actions (Scan & Clean)
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 if scanner.isScanning {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text(scanner.scanProgressMessage)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(">")
+                            .font(.system(size: 10, weight: .black, design: .monospaced))
+                            .foregroundStyle(RetroTheme.amber)
+                        Text(scanner.scanProgressMessage.uppercased())
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.amber)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Button {
                         Task {
                             await scanner.scanQuickCleanDashboard()
                             autoSelectFirstItem()
                         }
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .bold))
-                            Text(scanner.isScanning ? "Scanning..." : "Rescan")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 10, weight: .bold))
+                            Text(scanner.isScanning ? "SCANNING" : "RESCAN")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
+                        .padding(.vertical, 6)
+                        .background(RetroTheme.panelRaised)
+                        .foregroundStyle(RetroTheme.textPrimary)
+                        .cornerRadius(3)
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(RetroTheme.border, lineWidth: 1))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .disabled(scanner.isScanning)
 
                     let info = scanner.getSelectedCountAndBytes()
@@ -241,59 +233,63 @@ public struct MainWindowView: View {
                         showingTrashAlert = true
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "trash.fill")
-                                .font(.system(size: 10))
-                            Text(info.bytes > 0 ? ByteCountFormatter.string(fromByteCount: info.bytes, countStyle: .file) : "Clean")
-                                .font(.system(size: 11, weight: .bold))
+                            Text(info.bytes > 0 ? "PURGE [\(ByteCountFormatter.string(fromByteCount: info.bytes, countStyle: .file))]" : "PURGE")
+                                .font(.system(size: 10, weight: .black, design: .monospaced))
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
+                        .padding(.vertical, 6)
+                        .background(info.bytes > 0 ? RetroTheme.amber : RetroTheme.panelRaised)
+                        .foregroundStyle(info.bytes > 0 ? Color.black : RetroTheme.textDim)
+                        .cornerRadius(3)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.purple)
+                    .buttonStyle(.plain)
                     .disabled(info.bytes == 0 || scanner.isScanning)
                 }
             }
-            .padding(14)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+            .padding(10)
+            .background(RetroTheme.panel)
         }
     }
 
     private func sidebarSectionTitle(_ title: String) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundStyle(RetroTheme.textDim)
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 4)
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
     }
 
     private func sidebarNavRow(
         title: String,
         icon: String,
-        color: Color,
+        accentColor: Color,
         isSelected: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(color)
-                    .frame(width: 22, height: 22)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(accentColor)
+                    .frame(width: 16)
 
                 Text(title)
-                    .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .foregroundStyle(isSelected ? RetroTheme.textPrimary : RetroTheme.textMuted)
 
                 Spacer()
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor : Color.clear)
-            .cornerRadius(8)
+            .background(isSelected ? RetroTheme.panelRaised : Color.clear)
+            .cornerRadius(4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(isSelected ? RetroTheme.borderLight : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -306,163 +302,134 @@ public struct MainWindowView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: category.iconName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(category.color)
-                    .frame(width: 22, height: 22)
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(category.color)
+                    .frame(width: 3, height: 14)
 
-                Text(category.rawValue)
-                    .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                    .foregroundStyle(isSelected ? Color.white : Color.primary)
+                Text(category.rawValue.uppercased())
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium, design: .monospaced))
+                    .foregroundStyle(isSelected ? RetroTheme.textPrimary : RetroTheme.textMuted)
                     .lineLimit(1)
 
                 Spacer()
 
                 if totalSize > 0 {
                     Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.9) : Color.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(isSelected ? Color.white.opacity(0.2) : Color.secondary.opacity(0.12))
-                        .cornerRadius(5)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(isSelected ? RetroTheme.amber : RetroTheme.textMuted)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor : Color.clear)
-            .cornerRadius(8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(isSelected ? RetroTheme.panelRaised : Color.clear)
+            .cornerRadius(4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(isSelected ? RetroTheme.borderLight : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }
 
-    private var diskGaugeCard: some View {
-        VStack(spacing: 8) {
+    private var diskTelemetryBlock: some View {
+        VStack(spacing: 6) {
             HStack {
-                Text("Macintosh HD")
-                    .font(.system(size: 11, weight: .semibold))
+                Text("APFS ROOT DISK")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textDim)
                 Spacer()
-                Text("\(Int(scanner.usedDiskPercent * 100))% Used")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(scanner.usedDiskPercent > 0.85 ? .red : .secondary)
+                Text("\(Int(scanner.usedDiskPercent * 100))% ALLOCATED")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(scanner.usedDiskPercent > 0.85 ? RetroTheme.crimson : RetroTheme.cyan)
             }
 
+            // Segmented hardware-style meter
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.secondary.opacity(0.18))
-                        .frame(height: 6)
+                    Rectangle()
+                        .fill(RetroTheme.panelRaised)
+                        .frame(height: 5)
 
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: scanner.usedDiskPercent > 0.85 ? [.orange, .red] : [.cyan, .purple],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(6, geo.size.width * CGFloat(scanner.usedDiskPercent)), height: 6)
+                    Rectangle()
+                        .fill(scanner.usedDiskPercent > 0.85 ? RetroTheme.crimson : RetroTheme.cyan)
+                        .frame(width: max(4, geo.size.width * CGFloat(scanner.usedDiskPercent)), height: 5)
                 }
             }
-            .frame(height: 6)
+            .frame(height: 5)
 
             HStack {
-                Text("Free: \(ByteCountFormatter.string(fromByteCount: scanner.diskFreeBytes, countStyle: .file))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                Text("FREE: \(ByteCountFormatter.string(fromByteCount: scanner.diskFreeBytes, countStyle: .file))")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textMuted)
                 Spacer()
-                Text("✨ \(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file)) Cleanable")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.green)
+                Text("RECLAIM: \(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file))")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.emerald)
             }
 
-            Divider()
-                .padding(.vertical, 2)
-
-            // Real-Time CPU & Pacing Controller
+            // Real-time CPU Duty Cycle
             HStack(spacing: 6) {
-                Circle()
-                    .fill(cpuMonitor.cpuPercent > 50 ? Color.red : (cpuMonitor.cpuPercent > 15 ? Color.orange : Color.green))
-                    .frame(width: 6, height: 6)
+                Text("CPU:")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textDim)
 
-                Text(String(format: "CPU: %.1f%%", cpuMonitor.cpuPercent))
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(cpuMonitor.cpuPercent > 50 ? Color.red : Color.primary)
+                Text(String(format: "%.1f%%", cpuMonitor.cpuPercent))
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(cpuMonitor.cpuPercent > 15 ? RetroTheme.amber : RetroTheme.emerald)
 
                 Spacer()
 
-                Menu {
-                    Button {
-                        scanner.pacingMode = .pacedBurst
-                    } label: {
-                        Label("🟢 Paced Bursts (~10% CPU)", systemImage: scanner.pacingMode == .pacedBurst ? "checkmark" : "")
-                    }
-
-                    Button {
-                        scanner.pacingMode = .turbo
-                    } label: {
-                        Label("🚀 Turbo Full Speed (97% CPU)", systemImage: scanner.pacingMode == .turbo ? "checkmark" : "")
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(scanner.pacingMode == .pacedBurst ? "Paced (10%)" : "Turbo (97%)")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.12))
-                    .cornerRadius(4)
-                }
-                .menuStyle(.borderlessButton)
+                Text(scanner.pacingMode == .pacedBurst ? "[PACED 10%]" : "[TURBO 97%]")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textMuted)
             }
+            .padding(.top, 2)
         }
-        .padding(10)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-        .cornerRadius(8)
+        .padding(8)
+        .background(RetroTheme.bg)
+        .cornerRadius(4)
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(RetroTheme.border, lineWidth: 1))
     }
 
     // MARK: - Dashboard View
     private var dashboardView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                // Header Welcome Banner
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Mac Storage & Vitality Center")
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                        Text("Crucial isolates disposable build caches, application residue, and large files while safeguarding your critical system files.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 18) {
+                // Retro Header Readout
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("SYSTEM TELEMETRY & STORAGE AUDIT")
+                            .font(.system(size: 16, weight: .black, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textPrimary)
+                        Text("Deterministic heuristic categorization paired with local LLM deep diagnostics.")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textMuted)
                     }
                     Spacer()
 
-                    let total = scanner.totalCleanableBytes
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))
-                            .font(.system(size: 28, weight: .heavy, design: .rounded))
-                            .foregroundStyle(LinearGradient(colors: [.green, .cyan], startPoint: .leading, endPoint: .trailing))
-                        Text("Ready to Safely Reclaim")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file))
+                            .font(.system(size: 22, weight: .black, design: .monospaced))
+                            .foregroundStyle(RetroTheme.amber)
+                        Text("RECLAIMABLE JUNK")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textDim)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(12)
+                    .padding(10)
+                    .background(RetroTheme.panel)
+                    .cornerRadius(4)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(RetroTheme.border, lineWidth: 1))
                 }
-                .padding(.bottom, 4)
 
-                // 4 Category Quick-Drilldown Cards
-                Text("Junk Categories (Click to inspect individual files)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.secondary)
+                Divider().background(RetroTheme.border)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                // 4 Category Cards
+                Text("SECTOR INVENTORY // SELECT CATEGORY TO DRILL DOWN:")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textDim)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(JunkCategory.allCases.filter { $0 != .custom }) { cat in
                         let items = scanner.itemsByCategory[cat] ?? []
                         let size = items.reduce(0) { $0 + $1.size }
@@ -473,85 +440,76 @@ public struct MainWindowView: View {
                                 windowManager.selectedItem = first
                             }
                         } label: {
-                            HStack(spacing: 14) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(cat.color.opacity(0.15))
-                                        .frame(width: 48, height: 48)
+                            HStack(spacing: 12) {
+                                Rectangle()
+                                    .fill(cat.color)
+                                    .frame(width: 4, height: 38)
 
-                                    Image(systemName: cat.iconName)
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(cat.color)
-                                }
-
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 2) {
                                     HStack {
-                                        Text(cat.rawValue)
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundStyle(Color.primary)
+                                        Text(cat.rawValue.uppercased())
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(RetroTheme.textPrimary)
                                         Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .foregroundStyle(.secondary)
+                                        Text("\(items.count) FILES")
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .foregroundStyle(RetroTheme.textDim)
                                     }
 
                                     Text(cat.description)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundStyle(RetroTheme.textMuted)
                                         .lineLimit(1)
 
-                                    HStack(spacing: 8) {
-                                        Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
-                                            .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(size > 0 ? cat.color : .secondary)
-
-                                        Text("• \(items.count) files")
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(.top, 2)
+                                    Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+                                        .font(.system(size: 12, weight: .black, design: .monospaced))
+                                        .foregroundStyle(size > 0 ? RetroTheme.amber : RetroTheme.textMuted)
+                                        .padding(.top, 1)
                                 }
                             }
-                            .padding(14)
-                            .background(Color(NSColor.controlBackgroundColor).opacity(0.7))
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
-                            )
+                            .padding(10)
+                            .background(RetroTheme.panel)
+                            .cornerRadius(4)
+                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(RetroTheme.border, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
-                // Recent Trash History & Undo
+                // Recent Trash Staging Log
                 if !trashService.history.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Recently Trashed Items")
-                                .font(.system(size: 14, weight: .bold))
+                            Text("RECYCLE STAGING HISTORY")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.textDim)
                             Spacer()
-                            Button("Open macOS Trash") {
+                            Button("[OPEN MACOS TRASH]") {
                                 trashService.openTrash()
                             }
-                            .font(.system(size: 11))
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.cyan)
+                            .buttonStyle(.plain)
                         }
 
-                        VStack(spacing: 6) {
+                        VStack(spacing: 4) {
                             ForEach(trashService.history.prefix(5)) { record in
                                 HStack {
-                                    Image(systemName: "trash.circle")
-                                        .foregroundStyle(.secondary)
+                                    Text("STAGED:")
+                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(RetroTheme.emerald)
                                     Text(record.name)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundStyle(RetroTheme.textPrimary)
                                     Spacer()
                                     Text(ByteCountFormatter.string(fromByteCount: record.size, countStyle: .file))
-                                        .font(.system(size: 11, design: .monospaced))
-                                        .foregroundStyle(.secondary)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundStyle(RetroTheme.textMuted)
                                 }
-                                .padding(8)
-                                .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
-                                .cornerRadius(6)
+                                .padding(6)
+                                .background(RetroTheme.panel)
+                                .cornerRadius(3)
+                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(RetroTheme.border, lineWidth: 1))
                             }
                         }
                     }
@@ -560,11 +518,11 @@ public struct MainWindowView: View {
 
                 Spacer()
             }
-            .padding(26)
+            .padding(20)
         }
     }
 
-    // MARK: - Category Drilldown (Center File List + Right Vitality Inspector)
+    // MARK: - Category Drilldown (Center File List + Right Diagnostic Sheet)
     private func categoryDrilldownView(category: JunkCategory) -> some View {
         let allItems = scanner.itemsByCategory[category] ?? []
 
@@ -580,37 +538,37 @@ public struct MainWindowView: View {
         return HSplitView {
             // MARK: Center Pane - Files List
             VStack(spacing: 0) {
-                // Category Header Banner
+                // Header Bar
                 categoryHeaderBanner(category: category, items: allItems)
-                    .padding(16)
+                    .padding(14)
+                    .background(RetroTheme.panel)
 
-                Divider()
+                Divider().background(RetroTheme.border)
 
-                // Filter & Search Controls
+                // Search & Filter Bar
                 filterControlsBar(category: category, allItems: allItems)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+                    .background(RetroTheme.bg)
 
-                Divider()
+                Divider().background(RetroTheme.border)
 
-                // File List
+                // File Inventory List
                 if filteredItems.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.green)
-                        Text("No items found in \(category.rawValue)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 8) {
+                        Text("[SECTOR STATUS: CLEAN]")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.emerald)
+                        Text("No disposable assets detected in this category.")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textMuted)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(selection: Binding(
                         get: { windowManager.selectedItem },
                         set: { newItem in
-                            if let newItem {
-                                selectItemAndExplain(newItem)
-                            }
+                            windowManager.selectedItem = newItem
                         }
                     )) {
                         ForEach(filteredItems) { item in
@@ -619,6 +577,10 @@ public struct MainWindowView: View {
                                 .contextMenu {
                                     Button("Reveal in Finder") {
                                         NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+                                    }
+                                    Button("Ask Crucial Assistant") {
+                                        CrucialChatService.shared.askAbout(item: item)
+                                        windowManager.selectedNav = .assistant
                                     }
                                     Button("Copy Full Path") {
                                         NSPasteboard.general.clearContents()
@@ -635,505 +597,434 @@ public struct MainWindowView: View {
                     .listStyle(.inset)
                 }
             }
-            .frame(minWidth: 440, maxWidth: .infinity)
+            .frame(minWidth: 420, maxWidth: .infinity)
 
-            // MARK: Right Pane - Vitality & AI Inspector
+            // MARK: Right Pane - Exhaustive Technical Profile Sheet
             VStack(spacing: 0) {
                 if let item = windowManager.selectedItem {
-                    vitalityDetailPane(item: item)
+                    exhaustiveTechnicalSheet(item: item)
                 } else {
                     emptyInspectorPlaceholder
                 }
             }
-            .frame(minWidth: 360, maxWidth: 460)
-            .background(Color(NSColor.windowBackgroundColor))
+            .frame(minWidth: 400, maxWidth: 520)
+            .background(RetroTheme.panel)
         }
     }
 
-    // MARK: - Category Header Banner
     private func categoryHeaderBanner(category: JunkCategory, items: [FileItem]) -> some View {
         let totalBytes = items.reduce(0) { $0 + $1.size }
         let selected = items.filter { $0.isSelected }
         let selectedBytes = selected.reduce(0) { $0 + $1.size }
 
-        return HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(category.color.opacity(0.15))
-                    .frame(width: 44, height: 44)
+        return HStack(spacing: 12) {
+            Rectangle()
+                .fill(category.color)
+                .frame(width: 4, height: 28)
 
-                Image(systemName: category.iconName)
-                    .font(.system(size: 20))
-                    .foregroundStyle(category.color)
-            }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(category.rawValue.uppercased())
+                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textPrimary)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(category.rawValue)
-                        .font(.system(size: 17, weight: .bold))
-                    Text("\(items.count) files")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12))
-                        .cornerRadius(6)
+                    Text("[\(items.count) ASSETS]")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textMuted)
                 }
 
                 Text(category.description)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textDim)
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 3) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file))
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundStyle(category.color)
+                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                    .foregroundStyle(RetroTheme.amber)
 
                 if selected.count > 0 {
-                    Text("\(selected.count) selected (\(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file)))")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.purple)
+                    Text("\(selected.count) SELECTED (\(ByteCountFormatter.string(fromByteCount: selectedBytes, countStyle: .file)))")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundStyle(RetroTheme.cyan)
                 }
             }
         }
     }
 
-    // MARK: - Filter & Selection Controls
     private func filterControlsBar(category: JunkCategory, allItems: [FileItem]) -> some View {
-        VStack(spacing: 8) {
-            // Search Input Field
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 12))
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Text(">")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.cyan)
 
-                TextField("Filter files in \(category.rawValue)...", text: $searchText)
+                TextField("FILTER IN \(category.rawValue.uppercased())...", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textPrimary)
 
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                        Text("[CLEAR]")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textMuted)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(6)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(7)
+            .background(RetroTheme.panel)
+            .cornerRadius(3)
+            .overlay(RoundedRectangle(cornerRadius: 3).stroke(RetroTheme.border, lineWidth: 1))
 
-            // Filter Pills & Batch Selection
             HStack(spacing: 6) {
-                // Filter level chips
-                filterPill(title: "All", count: allItems.count, isSelected: filterLevel == nil) {
+                retroFilterPill(title: "ALL", count: allItems.count, isSelected: filterLevel == nil) {
                     filterLevel = nil
                 }
 
                 let safeCount = allItems.filter { $0.assessment.level == .safeToDelete }.count
                 if safeCount > 0 {
-                    filterPill(title: "🟢 Safe", count: safeCount, isSelected: filterLevel == .safeToDelete) {
+                    retroFilterPill(title: "SAFE", count: safeCount, isSelected: filterLevel == .safeToDelete) {
                         filterLevel = .safeToDelete
                     }
                 }
 
                 let cautionCount = allItems.filter { $0.assessment.level == .caution }.count
                 if cautionCount > 0 {
-                    filterPill(title: "🟡 Review", count: cautionCount, isSelected: filterLevel == .caution) {
+                    retroFilterPill(title: "REVIEW", count: cautionCount, isSelected: filterLevel == .caution) {
                         filterLevel = .caution
                     }
                 }
 
                 Spacer()
 
-                // Batch Selection Buttons
-                Button("Select Safe") {
+                Button("[SELECT SAFE]") {
                     scanner.selectSafeOnly(in: category)
                 }
-                .font(.system(size: 10, weight: .semibold))
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .buttonStyle(.plain)
+                .foregroundStyle(RetroTheme.emerald)
 
-                Button("Select All") {
+                Button("[SELECT ALL]") {
                     scanner.selectAll(in: category, selected: true)
                 }
-                .font(.system(size: 10, weight: .semibold))
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .buttonStyle(.plain)
+                .foregroundStyle(RetroTheme.textMuted)
 
-                Button("Deselect All") {
+                Button("[NONE]") {
                     scanner.selectAll(in: category, selected: false)
                 }
-                .font(.system(size: 10, weight: .semibold))
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .buttonStyle(.plain)
+                .foregroundStyle(RetroTheme.textDim)
             }
         }
     }
 
-    private func filterPill(title: String, count: Int, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func retroFilterPill(title: String, count: Int, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Text(title)
-                Text("(\(count))")
-                    .font(.system(size: 9, design: .monospaced))
-                    .opacity(0.8)
-            }
-            .font(.system(size: 11, weight: isSelected ? .bold : .regular))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.12))
-            .foregroundStyle(isSelected ? Color.white : Color.primary)
-            .cornerRadius(6)
+            Text("[\(title): \(count)]")
+                .font(.system(size: 9, weight: isSelected ? .black : .bold, design: .monospaced))
+                .foregroundStyle(isSelected ? RetroTheme.amber : RetroTheme.textMuted)
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - File Row Component
     private func fileRow(item: FileItem, in category: JunkCategory) -> some View {
-        HStack(spacing: 10) {
-            // Checkbox for Individual Selection
+        HStack(spacing: 8) {
+            // Retro Checkbox toggle
             Button {
                 scanner.toggleSelection(for: item.id, in: category)
             } label: {
-                Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 15))
-                    .foregroundStyle(item.isSelected ? Color.accentColor : Color.secondary.opacity(0.4))
+                Text(item.isSelected ? "[X]" : "[ ]")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(item.isSelected ? RetroTheme.amber : RetroTheme.borderLight)
             }
             .buttonStyle(.plain)
             .disabled(item.assessment.level == .vital)
 
-            // System Icon
             Image(nsImage: item.icon)
                 .resizable()
-                .frame(width: 24, height: 24)
+                .frame(width: 18, height: 18)
 
-            // File Name & Path Snippet
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(item.name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textPrimary)
                         .lineLimit(1)
 
-                    vitalityBadge(item.assessment.level)
+                    Text("[\(item.assessment.level.rawValue.uppercased())]")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundStyle(item.assessment.level == .safeToDelete ? RetroTheme.emerald : (item.assessment.level == .caution ? RetroTheme.amber : RetroTheme.crimson))
                 }
 
                 Text(item.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textDim)
                     .lineLimit(1)
             }
 
             Spacer()
 
-            // Metadata Badges (Idle Age + Size)
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 1) {
                 Text(item.formattedSize)
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(item.isSelected ? Color.primary : Color.secondary)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(item.isSelected ? RetroTheme.amber : RetroTheme.textPrimary)
 
                 if item.daysSinceLastAccess > 0 {
-                    Text("\(item.daysSinceLastAccess)d idle")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
+                    Text("\(item.daysSinceLastAccess)D IDLE")
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textDim)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 3)
     }
 
-    private func vitalityBadge(_ level: VitalityLevel) -> some View {
-        HStack(spacing: 3) {
-            Circle()
-                .fill(level.badgeColor)
-                .frame(width: 5, height: 5)
-            Text(level.rawValue)
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(level.badgeColor)
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(level.badgeColor.opacity(0.12))
-        .clipShape(Capsule())
-    }
+    // MARK: - Exhaustive Technical Profile Sheet (Right Column)
+    private func exhaustiveTechnicalSheet(item: FileItem) -> some View {
+        let profile = FileDiagnosticEngine.shared.profile(item: item)
 
-    // MARK: - Vitality Detail Inspector (Right Column)
-    private func vitalityDetailPane(item: FileItem) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                // Top Header (Large Icon + Name + Category)
-                HStack(spacing: 12) {
-                    Image(nsImage: item.icon)
-                        .resizable()
-                        .frame(width: 48, height: 48)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                // Header Title
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("[TELEMETRY AUDIT: \(profile.name)]")
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textPrimary)
+                        Spacer()
+                        Text(profile.formattedSize)
+                            .font(.system(size: 12, weight: .black, design: .monospaced))
+                            .foregroundStyle(RetroTheme.amber)
+                    }
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.name)
-                            .font(.system(size: 16, weight: .bold))
-                            .lineLimit(2)
+                    Text("CANONICAL: \(profile.path)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textDim)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                }
+                .padding(10)
+                .background(RetroTheme.panelRaised)
+                .cornerRadius(4)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(RetroTheme.border, lineWidth: 1))
 
-                        HStack(spacing: 6) {
-                            Text(item.category.rawValue)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(item.category.color)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(item.category.color.opacity(0.12))
-                                .cornerRadius(5)
+                // Purge Feasibility Verdict Box
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("PURGE VERDICT:")
+                            .font(.system(size: 9, weight: .black, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textDim)
+                        Spacer()
+                        Text(profile.deletionVerdict)
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundStyle(profile.canBeDeleted ? RetroTheme.emerald : RetroTheme.crimson)
+                    }
+                }
+                .padding(8)
+                .background(RetroTheme.panelRaised)
+                .cornerRadius(3)
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(profile.canBeDeleted ? RetroTheme.emerald.opacity(0.4) : RetroTheme.crimson.opacity(0.4), lineWidth: 1))
 
-                            Text(item.formattedSize)
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                // Section 1: Provenance & Identity
+                retroSectionHeader("1. IDENTITY & PROVENANCE")
+                VStack(alignment: .leading, spacing: 4) {
+                    telemetryRow(label: "ORIGINATING APP", value: profile.createdByApp)
+                    telemetryRow(label: "SUBSYSTEM DOMAIN", value: profile.subsystemOrigin)
+                    telemetryRow(label: "CLASSIFICATION", value: profile.fileClassification)
+                    telemetryRow(label: "EXACT MAGNITUDE", value: "\(profile.exactBytes) bytes across \(profile.fileCount) inodes")
+                    telemetryRow(label: "LAST MODIFIED", value: profile.lastModified)
+                    telemetryRow(label: "DORMANT DURATION", value: "\(profile.daysIdle) days unaccessed")
+                }
+                .padding(8)
+                .background(RetroTheme.panelRaised)
+                .cornerRadius(3)
+
+                // Section 2: Functional Purpose
+                retroSectionHeader("2. FUNCTIONAL ROLE (WHY DOES THIS EXIST?)")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.functionalPurpose)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textPrimary)
+                        .lineSpacing(3)
+
+                    Text("RATIONALE: \(profile.whyItExists)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textMuted)
+                        .padding(.top, 2)
+                }
+                .padding(8)
+                .background(RetroTheme.panelRaised)
+                .cornerRadius(3)
+
+                // Section 3: Process Dependency
+                retroSectionHeader("3. PROCESS & APPLICATION DEPENDENCY")
+                VStack(alignment: .leading, spacing: 4) {
+                    telemetryRow(label: "OWNING PROCESS", value: profile.activeProcessDependency)
+                    HStack {
+                        Text("PROCESS STATUS:")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.textDim)
+                        Spacer()
+                        Text(profile.isProcessRunning ? "⚠️ ACTIVE IN PROCESS TABLE" : "✅ DORMANT / CLOSED")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(profile.isProcessRunning ? RetroTheme.amber : RetroTheme.emerald)
+                    }
+                }
+                .padding(8)
+                .background(RetroTheme.panelRaised)
+                .cornerRadius(3)
+
+                // Section 4: Deletion Consequences
+                retroSectionHeader("4. DELETION DYNAMICS & RECOVERY PROTOCOL")
+                VStack(alignment: .leading, spacing: 4) {
+                    telemetryRow(label: "IMMEDIATE EFFECT", value: profile.immediateImpact)
+                    telemetryRow(label: "RELAUNCH BEHAVIOR", value: profile.appRelaunchImpact)
+
+                    if let cmd = profile.rebuildCommand {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("REBUILD COMMAND:")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.textDim)
+                            Text(cmd)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(RetroTheme.cyan)
+                                .padding(4)
+                                .background(RetroTheme.bg)
+                                .cornerRadius(2)
                         }
                     }
                 }
-                .padding(.top, 8)
+                .padding(8)
+                .background(RetroTheme.panelRaised)
+                .cornerRadius(3)
 
-                Divider()
+                // Section 5: Telemetry Scores
+                retroSectionHeader("5. CRUCIAL TELEMETRY SCORES")
+                HStack(spacing: 8) {
+                    scoreCard(title: "VITALITY RISK", score: profile.vitalityRiskScore, color: profile.vitalityRiskScore > 50 ? RetroTheme.crimson : RetroTheme.emerald)
+                    scoreCard(title: "BLOAT SEVERITY", score: profile.bloatSeverityScore, color: RetroTheme.amber)
+                    scoreCard(title: "RECOVERY COST", score: profile.recoveryDifficultyScore, color: RetroTheme.cyan)
+                }
 
-                // Path with Copy and Reveal
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("FULL LOCATION")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
+                // Interactive Buttons
+                VStack(spacing: 6) {
+                    Button {
+                        CrucialChatService.shared.askAbout(item: item)
+                        windowManager.selectedNav = .assistant
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(">")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.amber)
+                            Text("[RUN LOCAL LLM ANALYSIS IN CONSOLE]")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.textPrimary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(RetroTheme.panelRaised)
+                        .cornerRadius(3)
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(RetroTheme.amber, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
 
-                    HStack {
-                        Text(item.path)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .textSelection(.enabled)
-
-                        Spacer()
-
+                    HStack(spacing: 6) {
                         Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(item.path, forType: .string)
+                            NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
                         } label: {
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 11))
+                            Text("[REVEAL IN FINDER]")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(RetroTheme.panelRaised)
+                                .foregroundStyle(RetroTheme.textMuted)
+                                .cornerRadius(3)
+                                .overlay(RoundedRectangle(cornerRadius: 3).stroke(RetroTheme.border, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
-                        .help("Copy Full Path")
-                    }
-                    .padding(8)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
-                }
 
-                // Crucial Vitality Score Card & Risk Meter
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Label(item.assessment.level.rawValue, systemImage: item.assessment.level.iconName)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(item.assessment.level.badgeColor)
-
-                        Spacer()
-
-                        Text("Risk Score: \(item.assessment.riskScore)/100")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.15))
-                                .frame(height: 7)
-
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.green, .orange, .red],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: max(7, geo.size.width * CGFloat(Double(item.assessment.riskScore) / 100.0)), height: 7)
+                        Button {
+                            trashIndividualItem(item)
+                        } label: {
+                            Text("[STAGE TO TRASH]")
+                                .font(.system(size: 9, weight: .black, design: .monospaced))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(item.assessment.level == .vital ? RetroTheme.panelRaised : RetroTheme.crimson.opacity(0.8))
+                                .foregroundStyle(item.assessment.level == .vital ? RetroTheme.textDim : Color.white)
+                                .cornerRadius(3)
                         }
-                    }
-                    .frame(height: 7)
-                }
-                .padding(12)
-                .background(item.assessment.level.badgeColor.opacity(0.08))
-                .cornerRadius(10)
-
-                // Explanation: Why is this file here?
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Why is this file here?")
-                            .font(.system(size: 12, weight: .bold))
-
-                        Spacer()
-
-                        if isAiAnalyzing {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                        } else if item.assessment.aiGenerated {
-                            Label("AI Verified", systemImage: "sparkles")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.purple)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.15))
-                                .cornerRadius(5)
-                        }
-                    }
-
-                    Text(item.assessment.summary)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.primary)
-
-                    Text(item.assessment.impact)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .padding(9)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(6)
-                }
-
-                // Rebuild Command Snippet
-                if let rebuildCmd = item.assessment.rebuildCommand {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Rebuild Command (if needed):")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-
-                        HStack {
-                            Text(rebuildCmd)
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(rebuildCmd, forType: .string)
-                            } label: {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.system(size: 11))
-                            }
-                            .buttonStyle(.plain)
-                            .help("Copy Rebuild Command")
-                        }
-                        .padding(8)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(6)
+                        .buttonStyle(.plain)
+                        .disabled(item.assessment.level == .vital)
                     }
                 }
-
-                // Ask Crucial Assistant
-                Button {
-                    CrucialChatService.shared.askAbout(item: item)
-                    windowManager.selectedNav = .assistant
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bubble.left.and.sparkles.fill")
-                        Text("Ask Crucial Assistant about this file")
-                    }
-                    .font(.system(size: 11, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.purple)
-
-                // Optional Cloud AI Fallback
-                if GeminiExplainerService.shared.apiKey != nil && !item.assessment.aiGenerated {
-                    Button {
-                        triggerDeepAiAnalysis(item: item)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "sparkles")
-                            Text("Query Gemini Cloud AI")
-                        }
-                        .font(.system(size: 10, weight: .medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                Spacer()
-
-                Divider()
-
-                // Actions (Reveal & Trash)
-                HStack(spacing: 10) {
-                    Button {
-                        NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
-                    } label: {
-                        Label("Reveal in Finder", systemImage: "folder")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .buttonStyle(.bordered)
-
-                    Spacer()
-
-                    Button {
-                        trashIndividualItem(item)
-                    } label: {
-                        Label("Move to Trash", systemImage: "trash.fill")
-                            .font(.system(size: 11, weight: .bold))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .disabled(item.assessment.level == .vital)
-                    .help(item.assessment.level == .vital ? "Vital system files are protected from deletion" : "Safely moves this file to macOS Trash")
-                }
+                .padding(.top, 6)
             }
-            .padding(16)
+            .padding(12)
         }
+    }
+
+    private func retroSectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 9, weight: .black, design: .monospaced))
+            .foregroundStyle(RetroTheme.textDim)
+            .padding(.top, 4)
+    }
+
+    private func telemetryRow(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundStyle(RetroTheme.textDim)
+            Text(value)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(RetroTheme.textPrimary)
+        }
+    }
+
+    private func scoreCard(title: String, score: Int, color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(title)
+                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                .foregroundStyle(RetroTheme.textDim)
+            Text("\(score)")
+                .font(.system(size: 16, weight: .black, design: .monospaced))
+                .foregroundStyle(color)
+            Text("/ 100")
+                .font(.system(size: 7, design: .monospaced))
+                .foregroundStyle(RetroTheme.textDim)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(RetroTheme.bg)
+        .cornerRadius(3)
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(RetroTheme.border, lineWidth: 1))
     }
 
     private var emptyInspectorPlaceholder: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 36))
-                .foregroundStyle(.secondary)
-
-            Text("Select an individual file")
-                .font(.system(size: 14, weight: .semibold))
-
-            Text("Inspect its Crucial Vitality Score, AI explanation, and safely delete it.")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
+        VStack(spacing: 8) {
+            Text("[NO ASSET SELECTED]")
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(RetroTheme.textDim)
+            Text("Select an asset in the inventory table to view full telemetry.")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(RetroTheme.textMuted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: - Actions & Helpers
-    private func selectItemAndExplain(_ item: FileItem) {
-        windowManager.selectedItem = item
-
-        // Automatic Gemini AI explanation if API key is set and item not yet verified
-        if GeminiExplainerService.shared.apiKey != nil && !item.assessment.aiGenerated {
-            triggerDeepAiAnalysis(item: item)
-        }
-    }
-
-    private func triggerDeepAiAnalysis(item: FileItem) {
-        Task {
-            await MainActor.run { isAiAnalyzing = true }
-            let updatedAssessment = await GeminiExplainerService.shared.explain(item: item)
-            await MainActor.run {
-                if windowManager.selectedItem?.id == item.id {
-                    windowManager.selectedItem?.assessment = updatedAssessment
-                }
-                isAiAnalyzing = false
-            }
-        }
     }
 
     private func trashIndividualItem(_ item: FileItem) {
         do {
             try trashService.trash(item: item)
-            // Remove from scanner list
             for cat in scanner.itemsByCategory.keys {
                 scanner.itemsByCategory[cat]?.removeAll { $0.id == item.id }
             }

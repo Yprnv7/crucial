@@ -17,11 +17,10 @@ public final class CrucialChatService: ObservableObject {
             let welcome = ChatMessage(
                 sender: .assistant,
                 text: """
-                👋 **Hello! I'm your Crucial Assistant.**
-                
-                I have a built-in knowledge base of macOS system internals, developer toolchains, application caches, and file vitality rules.
-                
-                Ask me anything about your files, what is taking up space, or whether a specific folder is safe to delete. I will explain everything first, and only take actions when you ask!
+                **CRUCIAL DIAGNOSTIC INTERFACE // V1.0**
+                `SYSTEM: macOS Darwin // SUBSYSTEM AUDITOR ACTIVE`
+
+                Awaiting query or target inspection. Select any file in your storage breakdown or submit a system inquiry below.
                 """,
                 timestamp: Date()
             )
@@ -40,25 +39,26 @@ public final class CrucialChatService: ObservableObject {
 
         // Process response
         isTyping = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self = self else { return }
-            self.generateResponse(to: text, contextItem: contextItem)
-            self.isTyping = false
+        Task {
+            await self.generateResponse(to: text, contextItem: contextItem)
+            await MainActor.run {
+                self.isTyping = false
+            }
         }
     }
 
     public func askAbout(item: FileItem) {
-        let prompt = "Explain this file: \(item.name)"
+        let prompt = "DIAGNOSE_ASSET: \(item.path)"
         sendUserMessage(prompt, contextItem: item)
     }
 
-    private func generateResponse(to query: String, contextItem: FileItem?) {
+    private func generateResponse(to query: String, contextItem: FileItem?) async {
         let lower = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         let scanner = FileScannerService.shared
 
         // 1. If inquiring about a specific file or context item
         if let item = contextItem {
-            respondAboutItem(item)
+            await respondAboutItem(item)
             return
         }
 
@@ -255,48 +255,17 @@ public final class CrucialChatService: ObservableObject {
             return
         }
 
-        // Default Intelligent Fallback
-        let text = """
-        💡 **Here is what I can help you with:**
-        
-        - **"Why is my disk full?"** — Get a live breakdown of your storage.
-        - **"Explain DerivedData"** — Learn about Xcode build caches.
-        - **"Explain node_modules"** — Learn about npm dependency bloat.
-        - **"Can I delete caches?"** — See safety guidelines for `~/Library/Caches`.
-        - **"Clean safe files"** — Review and clean verified disposable files.
-        
-        Or select any file in Crucial and click **"Ask Assistant"** to inspect it!
-        """
+        // Supercharged Local LLM Answer for freeform inquiries
+        let llmAnswer = await LocalLLMService.shared.generateFreeformAnswer(for: query)
         let reply = ChatMessage(
             sender: .assistant,
-            text: text
+            text: llmAnswer
         )
         messages.append(reply)
     }
 
-    private func respondAboutItem(_ item: FileItem) {
-        let levelIcon = item.assessment.level == .safeToDelete ? "🟢" : (item.assessment.level == .caution ? "🟡" : "🛑")
-        let rebuildSnippet: String
-        if let cmd = item.assessment.rebuildCommand {
-            rebuildSnippet = "\n\n**How to Recreate (if ever needed):**\n```bash\n\(cmd)\n```"
-        } else {
-            rebuildSnippet = ""
-        }
-
-        let text = """
-        📄 **File Inspection: \(item.name)**
-        
-        - **Status:** \(levelIcon) **\(item.assessment.level.rawValue)**
-        - **Risk Score:** `\(item.assessment.riskScore)/100`
-        - **Size:** `\(item.formattedSize)`
-        - **Location:** `\(item.path)`
-        
-        **Why is this here?**
-        \(item.assessment.summary)
-        
-        **Impact of Deletion:**
-        \(item.assessment.impact)\(rebuildSnippet)
-        """
+    private func respondAboutItem(_ item: FileItem) async {
+        let text = await LocalLLMService.shared.generateDeepExplanation(for: item)
 
         let action: ChatAction?
         if item.assessment.level != .vital {

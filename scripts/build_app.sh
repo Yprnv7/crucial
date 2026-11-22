@@ -27,6 +27,19 @@ if [ -f "$DIR/resources/AppIcon.icns" ]; then
     cp "$DIR/resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
 
+# Copy embedded llama-cli binary
+mkdir -p "$RESOURCES_DIR/bin"
+if [ -f "$DIR/bin/llama-b12633/llama-cli" ]; then
+    cp "$DIR/bin/llama-b12633/llama-cli" "$RESOURCES_DIR/bin/llama-cli"
+    chmod +x "$RESOURCES_DIR/bin/llama-cli"
+fi
+
+# Link local model
+mkdir -p "$RESOURCES_DIR/models"
+if [ -f "$DIR/models/llama-3.2-1b-instruct-q4_k_m.gguf" ]; then
+    ln -sf "$DIR/models/llama-3.2-1b-instruct-q4_k_m.gguf" "$RESOURCES_DIR/models/llama-3.2-1b-instruct-q4_k_m.gguf"
+fi
+
 # Create Info.plist
 cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>

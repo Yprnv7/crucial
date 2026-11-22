@@ -4,6 +4,7 @@ import AppKit
 public struct CrucialAssistantView: View {
     @ObservedObject var chatService = CrucialChatService.shared
     @ObservedObject var windowManager = WindowManager.shared
+    @ObservedObject var localLLM = LocalLLMService.shared
     @State private var inputText: String = ""
     @State private var actionToConfirm: (action: ChatAction, messageId: UUID)? = nil
 
@@ -11,33 +12,34 @@ public struct CrucialAssistantView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Header Bar
-            headerSection
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            // Retro Diagnostic Terminal Header
+            terminalHeader
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(RetroTheme.panel)
 
-            Divider()
+            Divider().background(RetroTheme.border)
 
-            // Quick Prompt Suggestions Carousel
-            quickPromptsBar
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+            // Diagnostic Command Shortcuts
+            commandBar
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(RetroTheme.bg.opacity(0.8))
 
-            Divider()
+            Divider().background(RetroTheme.border)
 
-            // Chat Messages Stream
+            // Message Stream
             messagesStream
 
-            Divider()
+            Divider().background(RetroTheme.border)
 
-            // Input Bar
-            inputBarSection
-                .padding(14)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+            // Retro Command Console Input
+            consoleInputBar
+                .padding(12)
+                .background(RetroTheme.panel)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(RetroTheme.bg)
         .alert(item: Binding<ActionConfirmationItem?>(
             get: {
                 if let a = actionToConfirm {
@@ -48,50 +50,43 @@ public struct CrucialAssistantView: View {
             set: { _ in actionToConfirm = nil }
         )) { item in
             Alert(
-                title: Text("Execute Action?"),
-                message: Text("Crucial will now execute: \(item.action.title). Deletions are safely staged in your macOS Trash."),
-                primaryButton: .destructive(Text("Proceed")) {
+                title: Text("AUTHORIZE DISK OPERATION"),
+                message: Text("Crucial will execute: \(item.action.title). All deletions are staged in your macOS Trash."),
+                primaryButton: .destructive(Text("CONFIRM")) {
                     chatService.executeAction(item.action, for: item.messageId)
                 },
-                secondaryButton: .cancel()
+                secondaryButton: .cancel(Text("ABORT"))
             )
         }
     }
 
-    // MARK: - Header
-    private var headerSection: some View {
+    // MARK: - Terminal Header
+    private var terminalHeader: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(
-                        LinearGradient(
-                            colors: [.purple, .indigo, .cyan],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 36, height: 36)
-
-                Image(systemName: "bubble.left.and.sparkles.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.white)
+            HStack(spacing: 4) {
+                Circle().fill(Color.red.opacity(0.8)).frame(width: 8, height: 8)
+                Circle().fill(Color.yellow.opacity(0.8)).frame(width: 8, height: 8)
+                Circle().fill(Color.green.opacity(0.8)).frame(width: 8, height: 8)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Crucial Assistant")
-                        .font(.system(size: 15, weight: .bold))
-                    Text("100% Offline AI")
+                HStack(spacing: 8) {
+                    Text("CRUCIAL DIAGNOSTIC CONSOLE")
+                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textPrimary)
+
+                    Text(localLLM.isModelReady ? "ENGINE: LLAMA-3.2-METAL [ONLINE]" : "ENGINE: DEEP DIAGNOSTIC [ONLINE]")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 5)
+                        .foregroundStyle(RetroTheme.amber)
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 1)
-                        .background(Color.green.opacity(0.15))
-                        .cornerRadius(4)
+                        .background(RetroTheme.panelRaised)
+                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(RetroTheme.amber.opacity(0.4), lineWidth: 1))
                 }
-                Text("Built-in macOS expert knowledge for disk bloat, caches, and file vitality.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+
+                Text("SUBSYSTEM: APFS_AUDITOR // DISK_INODE_TELEMETRY // ZERO_DATA_LOSS_INTERLOCK")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textDim)
             }
 
             Spacer()
@@ -100,46 +95,47 @@ public struct CrucialAssistantView: View {
                 chatService.messages.removeAll()
                 chatService.loadWelcomeMessage()
             } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
+                Text("[CLEAR CONSOLE]")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textMuted)
             }
             .buttonStyle(.plain)
-            .help("Clear Chat History")
         }
     }
 
-    // MARK: - Quick Prompt Suggestions
-    private var quickPromptsBar: some View {
+    // MARK: - Command Bar
+    private var commandBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                promptChip("Why is my disk full?")
-                promptChip("Explain DerivedData")
-                promptChip("Explain node_modules")
-                promptChip("Can I delete ~/Library/Caches?")
-                promptChip("Clean safe files")
-                promptChip("Will deleting files break my Mac?")
+            HStack(spacing: 6) {
+                terminalPromptChip("DIAGNOSE_STORAGE", prompt: "Why is my disk full?")
+                terminalPromptChip("AUDIT_DERIVEDDATA", prompt: "Explain Xcode DerivedData")
+                terminalPromptChip("AUDIT_NODE_MODULES", prompt: "Explain node_modules")
+                terminalPromptChip("AUDIT_USER_CACHES", prompt: "Can I delete ~/Library/Caches?")
+                terminalPromptChip("STAGE_SAFE_CLEAN", prompt: "Clean safe files")
+                terminalPromptChip("VERIFY_SAFETY_LOCK", prompt: "Will deleting files break my Mac?")
             }
         }
     }
 
-    private func promptChip(_ text: String) -> some View {
+    private func terminalPromptChip(_ title: String, prompt: String) -> some View {
         Button {
-            chatService.sendUserMessage(text)
+            chatService.sendUserMessage(prompt)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "sparkle")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.purple)
-                Text(text)
-                    .font(.system(size: 11, weight: .medium))
+                Text(">")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.cyan)
+                Text(title)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textPrimary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(14)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(RetroTheme.panel)
+            .cornerRadius(4)
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(RetroTheme.border, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -149,25 +145,26 @@ public struct CrucialAssistantView: View {
     private var messagesStream: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 16) {
+                LazyVStack(spacing: 14) {
                     ForEach(chatService.messages) { msg in
-                        messageRow(msg)
+                        terminalMessageRow(msg)
                             .id(msg.id)
                     }
 
-                    if chatService.isTyping {
-                        HStack(spacing: 6) {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                            Text("Crucial Assistant is thinking...")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
+                    if chatService.isTyping || localLLM.isGenerating {
+                        HStack(spacing: 8) {
+                            Text(">")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.amber)
+                            Text("EXECUTING DIAGNOSTIC TELEMETRY ANALYSIS...")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.amber)
                             Spacer()
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 18)
                     }
                 }
-                .padding(20)
+                .padding(18)
             }
             .onChange(of: chatService.messages.count) {
                 if let last = chatService.messages.last {
@@ -179,137 +176,128 @@ public struct CrucialAssistantView: View {
         }
     }
 
-    private func messageRow(_ msg: ChatMessage) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            if msg.sender == .assistant {
-                ZStack {
-                    Circle()
-                        .fill(Color.purple.opacity(0.15))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "bolt.shield.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.purple)
-                }
-            } else {
+    private func terminalMessageRow(_ msg: ChatMessage) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Header bar of message
+            HStack(spacing: 6) {
+                Text(msg.sender == .user ? "[OPERATOR // QUERY]" : "[CRUCIAL TELEMETRY // REPORT]")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(msg.sender == .user ? RetroTheme.cyan : RetroTheme.amber)
+
                 Spacer()
+
+                Text(DateFormatter.localizedString(from: msg.timestamp, dateStyle: .none, timeStyle: .medium))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textDim)
             }
 
-            VStack(alignment: msg.sender == .user ? .trailing : .leading, spacing: 8) {
-                // Message Bubble
+            // Message Body
+            VStack(alignment: .leading, spacing: 6) {
                 Text(LocalizedStringKey(msg.text))
-                    .font(.system(size: 12))
-                    .lineSpacing(3)
-                    .padding(12)
-                    .foregroundStyle(msg.sender == .user ? Color.white : Color.primary)
-                    .background(
-                        msg.sender == .user
-                            ? Color.accentColor
-                            : Color(NSColor.controlBackgroundColor).opacity(0.8)
-                    )
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                    )
+                    .font(.system(size: 11, design: .monospaced))
+                    .lineSpacing(4)
+                    .foregroundStyle(RetroTheme.textPrimary)
+                    .textSelection(.enabled)
 
-                // Context File Pill if attached
-                if let item = msg.contextItem {
-                    HStack(spacing: 6) {
-                        Image(nsImage: item.icon)
-                            .resizable()
-                            .frame(width: 14, height: 14)
-                        Text(item.name)
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("(\(item.formattedSize))")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(6)
-                }
-
-                // Suggested Action Card (Shown only after explanation!)
+                // If Action Attached
                 if let action = msg.suggestedAction {
+                    Divider().background(RetroTheme.border)
+                        .padding(.vertical, 4)
+
                     if msg.isActionExecuted {
-                        HStack(spacing: 5) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text("Action Completed")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.green)
+                        HStack(spacing: 6) {
+                            Text("[STATUS: EXECUTED]")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.emerald)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(6)
+                        .padding(6)
+                        .background(RetroTheme.emerald.opacity(0.1))
+                        .cornerRadius(4)
                     } else {
-                        Button {
-                            actionToConfirm = (action: action, messageId: msg.id)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: action.iconName)
-                                    .font(.system(size: 11))
-                                Text(action.title)
-                                    .font(.system(size: 11, weight: .bold))
+                        HStack {
+                            Text("ACTION REQUIRED:")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(RetroTheme.amber)
+
+                            Spacer()
+
+                            Button {
+                                actionToConfirm = (action: action, messageId: msg.id)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("[")
+                                    Image(systemName: action.iconName)
+                                        .font(.system(size: 10))
+                                    Text(action.title.uppercased())
+                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    Text("]")
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(RetroTheme.panelRaised)
+                                .foregroundStyle(RetroTheme.amber)
+                                .cornerRadius(4)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(RetroTheme.amber, lineWidth: 1)
+                                )
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.purple)
-                            .foregroundStyle(.white)
-                            .cornerRadius(8)
-                            .shadow(color: .purple.opacity(0.3), radius: 4, x: 0, y: 2)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
-
-            if msg.sender == .user {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.blue)
-                }
-            } else {
-                Spacer()
-            }
+            .padding(12)
+            .background(msg.sender == .user ? RetroTheme.panel : RetroTheme.panelRaised)
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(msg.sender == .user ? RetroTheme.border : RetroTheme.borderLight, lineWidth: 1)
+            )
         }
     }
 
-    // MARK: - Input Bar
-    private var inputBarSection: some View {
+    // MARK: - Command Console Input
+    private var consoleInputBar: some View {
         VStack(spacing: 6) {
-            // Currently inspected item chip
+            // Target file badge if inspecting
             if let selected = windowManager.selectedItem {
                 HStack(spacing: 6) {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.purple)
-                    Text("Selected: \(selected.name)")
-                        .font(.system(size: 10, weight: .semibold))
+                    Text("ACTIVE_TARGET:")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(RetroTheme.amber)
+
+                    Text(selected.path)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(RetroTheme.textPrimary)
+                        .lineLimit(1)
+
                     Spacer()
-                    Button("Explain this file") {
+
+                    Button {
                         chatService.askAbout(item: selected)
+                    } label: {
+                        Text("[RUN FULL DIAGNOSTIC]")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(RetroTheme.cyan)
                     }
-                    .font(.system(size: 9, weight: .bold))
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.purple.opacity(0.1))
-                .cornerRadius(5)
+                .padding(6)
+                .background(RetroTheme.panelRaised)
+                .cornerRadius(4)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(RetroTheme.border, lineWidth: 1))
             }
 
             HStack(spacing: 8) {
-                TextField("Ask anything about your files, caches, or disk space...", text: $inputText)
+                Text(">")
+                    .font(.system(size: 13, weight: .black, design: .monospaced))
+                    .foregroundStyle(RetroTheme.cyan)
+
+                TextField("ENTER FILE PATH OR QUERY (e.g. 'Why is my disk full?')...", text: $inputText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(RetroTheme.textPrimary)
                     .onSubmit {
                         submitText()
                     }
@@ -317,20 +305,22 @@ public struct CrucialAssistantView: View {
                 Button {
                     submitText()
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary.opacity(0.4) : Color.purple)
+                    Text("[EXECUTE]")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? RetroTheme.textDim : RetroTheme.cyan)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(RetroTheme.panelRaised)
+                        .cornerRadius(4)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(RetroTheme.border, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(10)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
-            )
+            .background(RetroTheme.bg)
+            .cornerRadius(6)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(RetroTheme.border, lineWidth: 1))
         }
     }
 
