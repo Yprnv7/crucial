@@ -42,7 +42,7 @@ public enum ChatAction: Sendable, Equatable {
 public struct ChatMessage: Identifiable, Sendable, Equatable {
     public let id: UUID
     public let sender: MessageSender
-    public let text: String
+    public var text: String
     public let timestamp: Date
     public let contextItem: FileItem?
     public var suggestedAction: ChatAction?

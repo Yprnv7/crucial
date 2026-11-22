@@ -5,8 +5,7 @@ public struct MenuBarView: View {
     @ObservedObject var scanner = FileScannerService.shared
     @ObservedObject var trashService = SafetyTrashService.shared
     @ObservedObject var cpuMonitor = CPUMonitorService.shared
-    @State private var showingFinder = false
-    @State private var showingSettings = false
+    @ObservedObject var windowManager = WindowManager.shared
     @State private var showingCleanAlert = false
     @State private var cleanResultAlert: String?
 
@@ -14,48 +13,214 @@ public struct MenuBarView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Header Bar
-            headerSection
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 12)
+            // MARK: - Things 3 Mini Header
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(ThingsTheme.accent.opacity(0.15))
+                        .frame(width: 26, height: 26)
 
-            Divider()
-
-            // Disk Usage Gauge
-            diskGaugeSection
-                .padding(14)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
-
-            Divider()
-
-            // Category Overview
-            if scanner.isScanning {
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .scaleEffect(0.9)
-                    Text(scanner.scanProgressMessage)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 16)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(ThingsTheme.accent)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.vertical, 30)
-            } else {
-                categoriesSection
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Crucial")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(ThingsTheme.textPrimary)
+
+                    Text("Storage Intelligence")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ThingsTheme.textSecondary)
+                }
+
+                Spacer()
+
+                if scanner.isScanning {
+                    ProgressView().scaleEffect(0.65)
+                } else {
+                    Button {
+                        Task {
+                            await scanner.scanQuickCleanDashboard()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(ThingsTheme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Rescan Storage")
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(ThingsTheme.sidebar)
+
+            Divider().background(ThingsTheme.borderSubtle)
+
+            // MARK: - Things 3 Circular Progress Gauge Card
+            HStack(spacing: 14) {
+                ThingsProgressRing(
+                    progress: scanner.usedDiskPercent,
+                    size: 46,
+                    strokeWidth: 4,
+                    tintColor: scanner.usedDiskPercent > 0.85 ? ThingsTheme.vitalCrimson : ThingsTheme.accent,
+                    backgroundColor: ThingsTheme.border
+                )
+                .overlay(
+                    Text("\(Int(scanner.usedDiskPercent * 100))%")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Macintosh HD")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(ThingsTheme.textPrimary)
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: scanner.diskFreeBytes, countStyle: .file) + " free")
+                            .font(.system(size: 11))
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                    }
+
+                    HStack(spacing: 6) {
+                        Text(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file) + " cleanable")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(ThingsTheme.accent)
+
+                        Text("·")
+                            .foregroundStyle(ThingsTheme.textTertiary)
+
+                        Circle()
+                            .fill(cpuMonitor.cpuPercent > 20 ? ThingsTheme.starOchre : ThingsTheme.accent)
+                            .frame(width: 4, height: 4)
+
+                        Text("CPU \(String(format: "%.0f%%", cpuMonitor.cpuPercent))")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(ThingsTheme.textTertiary)
+                    }
+                }
+            }
+            .padding(14)
+            .background(ThingsTheme.card)
+
+            Divider().background(ThingsTheme.borderSubtle)
+
+            // MARK: - Categories Breakdown
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(JunkCategory.allCases.filter { $0 != .custom }) { cat in
+                        let items = scanner.itemsByCategory[cat] ?? []
+                        let size = items.reduce(0) { $0 + $1.size }
+
+                        Button {
+                            windowManager.selectedNav = .category(cat)
+                            windowManager.openMainWindow()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: cat.iconName)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(cat.color)
+                                    .frame(width: 16)
+
+                                Text(cat.rawValue)
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .foregroundStyle(ThingsTheme.textPrimary)
+
+                                Spacer()
+
+                                if size > 0 {
+                                    Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(ThingsTheme.textSecondary)
+
+                                    ThingsProgressRing(
+                                        progress: 1.0,
+                                        size: 10,
+                                        strokeWidth: 2,
+                                        tintColor: cat.color,
+                                        backgroundColor: ThingsTheme.border
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(ThingsTheme.cardRaised)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(12)
             }
 
-            Divider()
+            Divider().background(ThingsTheme.borderSubtle)
 
-            // Bottom Action Bar
-            actionFooter
-                .padding(12)
-                .background(Color(NSColor.windowBackgroundColor))
+            // MARK: - Action Footer
+            VStack(spacing: 8) {
+                if scanner.totalCleanableBytes > 0 {
+                    Button {
+                        showingCleanAlert = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Clean Safe Junk (\(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file)))")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(ThingsTheme.accent)
+                        .foregroundStyle(Color.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack(spacing: 8) {
+                    Button {
+                        windowManager.selectedNav = .assistant
+                        windowManager.openMainWindow()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .font(.system(size: 10))
+                            Text("Assistant")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(ThingsTheme.cardRaised)
+                        .foregroundStyle(ThingsTheme.textSecondary)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        windowManager.openMainWindow()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "macwindow")
+                                .font(.system(size: 10))
+                            Text("Open App")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(ThingsTheme.cardRaised)
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(12)
+            .background(ThingsTheme.sidebar)
         }
-        .frame(width: 360, height: 480)
+        .frame(width: 320, height: 420)
+        .background(ThingsTheme.canvas)
         .onAppear {
             if scanner.totalCleanableBytes == 0 && !scanner.isScanning {
                 Task {
@@ -66,304 +231,16 @@ public struct MenuBarView: View {
         .alert(isPresented: $showingCleanAlert) {
             Alert(
                 title: Text("Clean Safe Files?"),
-                message: Text("Crucial will safely move the selected items to your macOS Trash. You can restore them anytime."),
+                message: Text("Crucial will safely move disposable build artifacts and caches to macOS Trash."),
                 primaryButton: .destructive(Text("Move to Trash")) {
-                    cleanSelectedItems()
+                    for cat in JunkCategory.allCases {
+                        scanner.selectSafeOnly(in: cat)
+                    }
+                    let res = scanner.cleanSelected()
+                    cleanResultAlert = "Reclaimed \(ByteCountFormatter.string(fromByteCount: res.bytesFreed, countStyle: .file))."
                 },
                 secondaryButton: .cancel()
             )
-        }
-    }
-
-    private var headerSection: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "bolt.shield.fill")
-                .font(.system(size: 20))
-                .foregroundStyle(LinearGradient(colors: [.yellow, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Crucial")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                    Text("v1.0")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.15))
-                        .cornerRadius(4)
-                }
-                Text("Mac Junk Cleaner & File Finder")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button {
-                WindowManager.shared.focusMainWindow()
-            } label: {
-                Image(systemName: "arrow.up.forward.app")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .help("Open Full Crucial Application")
-
-            Button {
-                Task {
-                    await scanner.scanQuickCleanDashboard()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .help("Rescan Mac")
-
-            Button {
-                WindowManager.shared.openSettingsWindow()
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 12, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .help("Crucial Settings")
-        }
-    }
-
-    private var diskGaugeSection: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("Macintosh HD")
-                    .font(.system(size: 12, weight: .medium))
-                Spacer()
-                Text("\(Int(scanner.usedDiskPercent * 100))% Used")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(scanner.usedDiskPercent > 0.85 ? .red : .secondary)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 7)
-
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: scanner.usedDiskPercent > 0.85 ? [.orange, .red] : [.blue, .purple],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geo.size.width * CGFloat(scanner.usedDiskPercent), height: 7)
-                }
-            }
-            .frame(height: 7)
-
-            HStack {
-                Text("Free: \(ByteCountFormatter.string(fromByteCount: scanner.diskFreeBytes, countStyle: .file))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.green)
-                    Text("\(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file)) Cleanable")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(.green)
-                }
-            }
-
-            HStack {
-                Circle()
-                    .fill(cpuMonitor.cpuPercent > 50 ? Color.red : (cpuMonitor.cpuPercent > 15 ? Color.orange : Color.green))
-                    .frame(width: 5, height: 5)
-                Text(String(format: "CPU: %.1f%%", cpuMonitor.cpuPercent))
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    scanner.pacingMode = (scanner.pacingMode == .pacedBurst) ? .turbo : .pacedBurst
-                } label: {
-                    Text(scanner.pacingMode == .pacedBurst ? "⚡ Paced (10%)" : "🚀 Turbo (97%)")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(scanner.pacingMode == .pacedBurst ? .green : .orange)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.12))
-                        .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
-                .help("Toggle between Paced Bursts (~10% CPU) and Turbo Mode (97% CPU)")
-            }
-        }
-    }
-
-    private var categoriesSection: some View {
-        ScrollView {
-            VStack(spacing: 6) {
-                categoryCard(
-                    category: .devArtifacts,
-                    title: "Developer Caches",
-                    subtitle: "node_modules, DerivedData, .venv",
-                    items: scanner.itemsByCategory[.devArtifacts] ?? []
-                )
-
-                categoryCard(
-                    category: .systemCache,
-                    title: "System & User Caches",
-                    subtitle: "~/Library/Caches & logs",
-                    items: scanner.itemsByCategory[.systemCache] ?? []
-                )
-
-                categoryCard(
-                    category: .largeUnused,
-                    title: "Large Idle Downloads",
-                    subtitle: "DMGs, PKGs > 200MB",
-                    items: scanner.itemsByCategory[.largeUnused] ?? []
-                )
-
-                categoryCard(
-                    category: .appResidue,
-                    title: "Leftover App Residue",
-                    subtitle: "Uninstalled application folders",
-                    items: scanner.itemsByCategory[.appResidue] ?? []
-                )
-            }
-        }
-    }
-
-    private func categoryCard(category: JunkCategory, title: String, subtitle: String, items: [FileItem]) -> some View {
-        let totalSize = items.reduce(0) { $0 + $1.size }
-        let formatted = ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
-
-        return Button {
-            WindowManager.shared.openCategory(category)
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: category.iconName)
-                    .font(.system(size: 14))
-                    .foregroundStyle(category.color)
-                    .frame(width: 26, height: 26)
-                    .background(category.color.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.primary)
-                    Text(subtitle)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(formatted)
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundStyle(totalSize > 0 ? Color.primary : Color.secondary)
-
-                    HStack(spacing: 3) {
-                        Text("\(items.count) files")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-            .cornerRadius(8)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var actionFooter: some View {
-        VStack(spacing: 8) {
-            Button {
-                WindowManager.shared.focusMainWindow()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "macwindow.on.rectangle")
-                    Text("Open Crucial App & Inspect Files")
-                        .fontWeight(.semibold)
-                }
-                .font(.system(size: 12))
-                .frame(maxWidth: .infinity)
-                .frame(height: 30)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.purple)
-
-            HStack(spacing: 8) {
-                Button {
-                    showingCleanAlert = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash.fill")
-                        Text("Clean Safe (\(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file)))")
-                            .fontWeight(.semibold)
-                    }
-                    .font(.system(size: 11))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 28)
-                }
-                .buttonStyle(.bordered)
-                .disabled(scanner.totalCleanableBytes == 0 || scanner.isScanning)
-
-                Button {
-                    WindowManager.shared.navigate(to: .assistant)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bubble.left.and.sparkles.fill")
-                        Text("Assistant")
-                    }
-                    .font(.system(size: 11, weight: .medium))
-                    .frame(height: 28)
-                    .padding(.horizontal, 8)
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    WindowManager.shared.navigate(to: .fileFinder)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "magnifyingglass")
-                        Text("Finder")
-                    }
-                    .font(.system(size: 11, weight: .medium))
-                    .frame(height: 28)
-                    .padding(.horizontal, 8)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-    }
-
-    private func cleanSelectedItems() {
-        var itemsToTrash: [FileItem] = []
-        for (_, items) in scanner.itemsByCategory {
-            for item in items where item.assessment.level == .safeToDelete {
-                itemsToTrash.append(item)
-            }
-        }
-
-        let result = trashService.trashBatch(items: itemsToTrash)
-        scanner.totalCleanableBytes = 0
-        cleanResultAlert = "Moved \(result.succeeded) items (\(ByteCountFormatter.string(fromByteCount: result.bytesFreed, countStyle: .file))) to Trash."
-
-        // Rescan after cleaning
-        Task {
-            await scanner.scanQuickCleanDashboard()
         }
     }
 }

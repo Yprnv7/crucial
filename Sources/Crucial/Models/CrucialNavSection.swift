@@ -4,6 +4,8 @@ import SwiftUI
 public enum CrucialNavSection: Hashable, Identifiable, Sendable {
     case dashboard
     case category(JunkCategory)
+    case diskMap
+    case duplicates
     case fileFinder
     case assistant
     case settings
@@ -14,6 +16,10 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
             return "dashboard"
         case .category(let cat):
             return "category_\(cat.rawValue)"
+        case .diskMap:
+            return "diskMap"
+        case .duplicates:
+            return "duplicates"
         case .fileFinder:
             return "fileFinder"
         case .assistant:
@@ -29,6 +35,10 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
             return "Dashboard"
         case .category(let cat):
             return cat.rawValue
+        case .diskMap:
+            return "Storage Treemap"
+        case .duplicates:
+            return "Duplicate Finder"
         case .fileFinder:
             return "Deep File Finder"
         case .assistant:
@@ -41,13 +51,17 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
     public var iconName: String {
         switch self {
         case .dashboard:
-            return "gauge.with.needle.fill"
+            return "star.fill"
         case .category(let cat):
             return cat.iconName
+        case .diskMap:
+            return "chart.pie.fill"
+        case .duplicates:
+            return "doc.on.doc.fill"
         case .fileFinder:
             return "magnifyingglass"
         case .assistant:
-            return "bubble.left.and.sparkles.fill"
+            return "bubble.left.and.bubble.right.fill"
         case .settings:
             return "gearshape.fill"
         }
@@ -56,15 +70,19 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
     public var accentColor: Color {
         switch self {
         case .dashboard:
-            return .blue
+            return ThingsTheme.starOchre
         case .category(let cat):
             return cat.color
+        case .diskMap:
+            return ThingsTheme.accent
+        case .duplicates:
+            return ThingsTheme.purple
         case .fileFinder:
-            return .green
+            return ThingsTheme.glacierCyan
         case .assistant:
-            return .purple
+            return ThingsTheme.infoIndigo
         case .settings:
-            return .gray
+            return ThingsTheme.textTertiary
         }
     }
 }

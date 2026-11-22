@@ -13,6 +13,7 @@ public final class CrucialChatService: ObservableObject {
     }
 
     public func loadWelcomeMessage() {
+        LocalLLMService.shared.clearConversationHistory()
         if messages.isEmpty {
             let welcome = ChatMessage(
                 sender: .assistant,
@@ -255,13 +256,20 @@ public final class CrucialChatService: ObservableObject {
             return
         }
 
-        // Supercharged Local LLM Answer for freeform inquiries
-        let llmAnswer = await LocalLLMService.shared.generateFreeformAnswer(for: query)
-        let reply = ChatMessage(
+        // Streaming Real-Time Local LLM Response
+        let replyId = UUID()
+        let placeholder = ChatMessage(
+            id: replyId,
             sender: .assistant,
-            text: llmAnswer
+            text: ""
         )
-        messages.append(reply)
+        messages.append(placeholder)
+
+        _ = await LocalLLMService.shared.streamFreeformAnswer(for: query) { token in
+            if let idx = self.messages.firstIndex(where: { $0.id == replyId }) {
+                self.messages[idx].text += token
+            }
+        }
     }
 
     private func respondAboutItem(_ item: FileItem) async {

@@ -29,6 +29,10 @@ public struct MainWindowView: View {
                 switch windowManager.selectedNav {
                 case .dashboard:
                     dashboardView
+                case .diskMap:
+                    DiskSunburstView()
+                case .duplicates:
+                    DuplicatesView()
                 case .category(let category):
                     categoryDrilldownView(category: category)
                 case .fileFinder:
@@ -40,6 +44,7 @@ public struct MainWindowView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: windowManager.selectedNav)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(ThingsTheme.canvas)
         }
@@ -177,7 +182,29 @@ public struct MainWindowView: View {
                         windowManager.selectedNav = .dashboard
                     }
 
-                    // 2. Crucial Assistant (Conversational AI)
+                    // 2. Visual Storage Treemap
+                    thingsNavRow(
+                        title: "Storage Treemap",
+                        icon: "chart.pie.fill",
+                        tintColor: ThingsTheme.accent,
+                        badge: nil,
+                        isSelected: windowManager.selectedNav == .diskMap
+                    ) {
+                        windowManager.selectedNav = .diskMap
+                    }
+
+                    // 3. Duplicate File Finder
+                    thingsNavRow(
+                        title: "Duplicate Finder",
+                        icon: "doc.on.doc.fill",
+                        tintColor: ThingsTheme.purple,
+                        badge: DuplicateFinderService.shared.totalWastedBytes > 0 ? ByteCountFormatter.string(fromByteCount: DuplicateFinderService.shared.totalWastedBytes, countStyle: .file) : nil,
+                        isSelected: windowManager.selectedNav == .duplicates
+                    ) {
+                        windowManager.selectedNav = .duplicates
+                    }
+
+                    // 4. Crucial Assistant (Conversational AI)
                     thingsNavRow(
                         title: "Crucial Assistant",
                         icon: "bubble.left.and.bubble.right.fill",
@@ -188,7 +215,7 @@ public struct MainWindowView: View {
                         windowManager.selectedNav = .assistant
                     }
 
-                    // 3. Deep File Finder
+                    // 5. Deep File Finder
                     thingsNavRow(
                         title: "Deep File Finder",
                         icon: "magnifyingglass",

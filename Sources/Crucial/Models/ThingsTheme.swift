@@ -145,7 +145,11 @@ public struct ThingsCheckbox: View {
     }
 
     public var body: some View {
-        Button(action: action) {
+        Button(action: {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) {
+                action()
+            }
+        }) {
             ZStack {
                 Circle()
                     .strokeBorder(isChecked ? tintColor : ThingsTheme.border, lineWidth: 1.5)
@@ -156,8 +160,10 @@ public struct ThingsCheckbox: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Color.white)
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
+            .scaleEffect(isChecked ? 1.06 : 1.0)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
