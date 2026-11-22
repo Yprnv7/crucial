@@ -1,29 +1,55 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 public struct AppUninstallerView: View {
     @ObservedObject var uninstaller = AppUninstallerService.shared
     @State private var searchText = ""
+    @State private var selectedFilter: AppFilterCategory = .all
     @State private var showingUninstallAlert = false
     @State private var isTargetedForDrop = false
+    @State private var isPerformingUninstall = false
+
+    public enum AppFilterCategory: String, CaseIterable, Identifiable {
+        case all = "All"
+        case user = "User Apps"
+        case running = "Running"
+        case protected = "Protected"
+
+        public var id: String { rawValue }
+    }
 
     public init() {}
 
     private var filteredApps: [InstalledAppInfo] {
-        if searchText.isEmpty {
-            return uninstaller.installedApps
+        var list = uninstaller.installedApps
+
+        switch selectedFilter {
+        case .all:
+            break
+        case .user:
+            list = list.filter { !$0.isSystemProtected }
+        case .running:
+            list = list.filter { $0.isRunning }
+        case .protected:
+            list = list.filter { $0.isSystemProtected }
         }
-        return uninstaller.installedApps.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.bundleIdentifier.localizedCaseInsensitiveContains(searchText)
+
+        if !searchText.isEmpty {
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            list = list.filter {
+                $0.name.lowercased().contains(query) ||
+                $0.bundleIdentifier.lowercased().contains(query)
+            }
         }
+        return list
     }
 
     public var body: some View {
         HSplitView {
-            // Left Pane: Installed Apps List & Drop Target
+            // MARK: - Left Pane: App List & Filter
             VStack(spacing: 0) {
-                // Header & Search
+                // Header & Action Bar
                 VStack(spacing: 10) {
                     HStack(spacing: 10) {
                         ZStack {
@@ -52,10 +78,14 @@ public struct AppUninstallerView: View {
                             }
                         } label: {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11))
-                                .foregroundStyle(ThingsTheme.textTertiary)
+                                .font(.system(size: 12))
+                                .foregroundStyle(ThingsTheme.textSecondary)
+                                .padding(6)
+                                .background(ThingsTheme.cardRaised)
+                                .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
+                        .help("Rescan installed applications")
                     }
 
                     // Search Field
@@ -63,40 +93,74 @@ public struct AppUninstallerView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 11))
                             .foregroundStyle(ThingsTheme.textTertiary)
-                        TextField("Filter apps...", text: $searchText)
+                        TextField("Filter apps by name or bundle ID...", text: $searchText)
                             .textFieldStyle(.plain)
                             .font(.system(size: 11))
                         if !searchText.isEmpty {
                             Button { searchText = "" } label: {
-                                Image(systemName: "xmark.circle.fill").font(.system(size: 11)).foregroundStyle(ThingsTheme.textTertiary)
-                            }.buttonStyle(.plain)
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(ThingsTheme.textTertiary)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 6)
                     .background(ThingsTheme.cardRaised)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(ThingsTheme.border, lineWidth: 1)
+                    )
+
+                    // Filter Segment Chips
+                    HStack(spacing: 4) {
+                        ForEach(AppFilterCategory.allCases) { category in
+                            let isSelected = selectedFilter == category
+                            let count = countForCategory(category)
+                            Button {
+                                selectedFilter = category
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Text(category.rawValue)
+                                        .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                                    Text("\(count)")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(isSelected ? Color.white.opacity(0.8) : ThingsTheme.textTertiary)
+                                }
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(isSelected ? ThingsTheme.accent : ThingsTheme.cardRaised)
+                                .foregroundStyle(isSelected ? Color.white : ThingsTheme.textSecondary)
+                                .clipShape(RoundedRectangle(cornerRadius: 5))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
                 .padding(14)
                 .background(ThingsTheme.sidebar)
 
                 Divider().background(ThingsTheme.borderSubtle)
 
-                // Drag & Drop Hint Banner
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.down.doc")
-                        .font(.system(size: 11))
-                    Text("Drag and drop any .app here to inspect residue")
-                        .font(.system(size: 10))
+                // Drag & Drop Dropzone Banner
+                HStack(spacing: 8) {
+                    Image(systemName: isTargetedForDrop ? "arrow.down.app.fill" : "arrow.down.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isTargetedForDrop ? ThingsTheme.accent : ThingsTheme.textTertiary)
+                    Text(isTargetedForDrop ? "Drop .app to inspect residue" : "Drag and drop any .app here to inspect residue")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(isTargetedForDrop ? ThingsTheme.accent : ThingsTheme.textSecondary)
                 }
-                .foregroundStyle(isTargetedForDrop ? ThingsTheme.accent : ThingsTheme.textTertiary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(isTargetedForDrop ? ThingsTheme.accent.opacity(0.1) : ThingsTheme.cardRaised.opacity(0.5))
+                .padding(.vertical, 8)
+                .background(isTargetedForDrop ? ThingsTheme.accent.opacity(0.12) : ThingsTheme.cardRaised.opacity(0.4))
+                .animation(.easeInOut(duration: 0.2), value: isTargetedForDrop)
 
                 Divider().background(ThingsTheme.borderSubtle)
 
-                // Apps List
+                // Apps Scrollable List
                 if uninstaller.isScanning {
                     VStack(spacing: 12) {
                         ProgressView().scaleEffect(0.8)
@@ -105,55 +169,60 @@ public struct AppUninstallerView: View {
                             .foregroundStyle(ThingsTheme.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(selection: Binding(
-                        get: { uninstaller.selectedApp?.id },
-                        set: { newID in
-                            uninstaller.selectedApp = uninstaller.installedApps.first { $0.id == newID }
-                        }
-                    )) {
-                        ForEach(filteredApps) { app in
-                            appRow(app)
-                                .tag(app.id)
+                } else if filteredApps.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 24))
+                            .foregroundStyle(ThingsTheme.textTertiary)
+                        Text("No applications found")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                        if !searchText.isEmpty {
+                            Button("Clear Filter") { searchText = ""; selectedFilter = .all }
+                                .font(.system(size: 11))
+                                .buttonStyle(.plain)
+                                .foregroundStyle(ThingsTheme.accent)
                         }
                     }
-                    .listStyle(.inset)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 4) {
+                            ForEach(filteredApps) { app in
+                                appRow(app)
+                            }
+                        }
+                        .padding(8)
+                    }
                 }
             }
-            .frame(minWidth: 320, maxWidth: 440)
-            .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop) { providers in
-                guard let provider = providers.first else { return false }
-                _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url = url, url.pathExtension == "app" else { return }
-                    DispatchQueue.main.async {
-                        if let customApp = uninstaller.analyzeSingleApp(url: url) {
-                            uninstaller.selectedApp = customApp
-                        }
-                    }
-                }
-                return true
+            .frame(minWidth: 320, maxWidth: 420)
+            .onDrop(of: [UTType.fileURL.identifier, "public.file-url", UTType.application.identifier], isTargeted: $isTargetedForDrop) { providers in
+                handleDrop(providers: providers)
             }
 
-            // Right Pane: Residue Inspection & Complete Trashing
+            // MARK: - Right Pane: Residue Inspection & Trashing
             VStack(spacing: 0) {
                 if let app = uninstaller.selectedApp {
                     appDetailPane(app)
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "app.dashed")
-                            .font(.system(size: 36))
+                            .font(.system(size: 40))
                             .foregroundStyle(ThingsTheme.textTertiary)
                         Text("Select an Application")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(ThingsTheme.textPrimary)
-                        Text("Crucial will trace its container, cache stores, and preference plists.")
-                            .font(.system(size: 11))
+                        Text("Crucial will trace its container, cache stores, preferences, and launch agents.")
+                            .font(.system(size: 11.5))
                             .foregroundStyle(ThingsTheme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 30)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 420, maxWidth: .infinity)
+            .frame(minWidth: 460, maxWidth: .infinity)
             .background(ThingsTheme.canvas)
         }
         .onAppear {
@@ -167,58 +236,121 @@ public struct AppUninstallerView: View {
             guard let app = uninstaller.selectedApp else {
                 return Alert(title: Text("Error"))
             }
+
+            let willTrashBundle = app.isBundleSelected && !app.isSystemProtected
+            let _ = app.checkedResidueCount + (willTrashBundle ? 1 : 0)
+
+            let title = willTrashBundle ? "Completely Uninstall \(app.name)?" : "Clean Selected Residue for \(app.name)?"
+            let message = willTrashBundle ?
+                "Crucial will safely stage the application bundle and \(app.checkedResidueCount) selected support files (\(app.formattedReclaimableSize)) into your macOS Trash. You can restore them from Trash anytime." :
+                "Crucial will safely stage \(app.checkedResidueCount) selected support files (\(app.formattedReclaimableSize)) into your macOS Trash while preserving the application bundle."
+
             return Alert(
-                title: Text("Completely Uninstall \(app.name)?"),
-                message: Text("Crucial will safely stage the application bundle and all \(app.residueItems.count) support files (\(app.formattedTotalSize)) into your macOS Trash."),
+                title: Text(title),
+                message: Text(message),
                 primaryButton: .destructive(Text("Move to Trash")) {
-                    uninstaller.uninstallApp(app)
+                    isPerformingUninstall = true
+                    Task {
+                        _ = await uninstaller.uninstallApp(app)
+                        isPerformingUninstall = false
+                    }
                 },
                 secondaryButton: .cancel(Text("Cancel"))
             )
         }
     }
 
-    private func appRow(_ app: InstalledAppInfo) -> some View {
-        HStack(spacing: 10) {
-            Image(nsImage: app.icon)
-                .resizable()
-                .frame(width: 24, height: 24)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(app.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ThingsTheme.textPrimary)
-                    .lineLimit(1)
-
-                Text("v\(app.version)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(ThingsTheme.textTertiary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(app.formattedTotalSize)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ThingsTheme.textPrimary)
-
-                if !app.residueItems.isEmpty {
-                    Text("\(app.residueItems.count) residue items")
-                        .font(.system(size: 9))
-                        .foregroundStyle(ThingsTheme.accent)
-                }
-            }
+    private func countForCategory(_ category: AppFilterCategory) -> Int {
+        switch category {
+        case .all:
+            return uninstaller.installedApps.count
+        case .user:
+            return uninstaller.installedApps.filter { !$0.isSystemProtected }.count
+        case .running:
+            return uninstaller.installedApps.filter { $0.isRunning }.count
+        case .protected:
+            return uninstaller.installedApps.filter { $0.isSystemProtected }.count
         }
-        .padding(.vertical, 3)
     }
 
+    // MARK: - Left Pane Row
+    private func appRow(_ app: InstalledAppInfo) -> some View {
+        let isSelected = uninstaller.selectedApp?.id == app.id
+
+        return Button {
+            uninstaller.selectApp(app)
+        } label: {
+            HStack(spacing: 10) {
+                Image(nsImage: app.icon)
+                    .resizable()
+                    .frame(width: 28, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 5) {
+                        Text(app.name)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(ThingsTheme.textPrimary)
+                            .lineLimit(1)
+
+                        if app.isRunning {
+                            Circle()
+                                .fill(ThingsTheme.starOchre)
+                                .frame(width: 6, height: 6)
+                                .help("Application is currently running")
+                        }
+                    }
+
+                    HStack(spacing: 4) {
+                        if app.isSystemProtected {
+                            Text("System Protected")
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(ThingsTheme.textTertiary)
+                        } else {
+                            Text("v\(app.version)")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(ThingsTheme.textTertiary)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(app.formattedTotalSize)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isSelected ? ThingsTheme.accent : ThingsTheme.textPrimary)
+
+                    if !app.residueItems.isEmpty {
+                        Text("\(app.residueItems.count) residue")
+                            .font(.system(size: 9))
+                            .foregroundStyle(ThingsTheme.accent)
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(isSelected ? ThingsTheme.cardRaised : ThingsTheme.card.opacity(0.4))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(isSelected ? ThingsTheme.accent.opacity(0.7) : ThingsTheme.borderSubtle, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Right Detail Pane
     private func appDetailPane(_ app: InstalledAppInfo) -> some View {
         VStack(spacing: 0) {
             // App Header Card
-            HStack(spacing: 14) {
+            HStack(spacing: 16) {
                 Image(nsImage: app.icon)
                     .resizable()
-                    .frame(width: 50, height: 50)
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
@@ -227,9 +359,19 @@ public struct AppUninstallerView: View {
                             .foregroundStyle(ThingsTheme.textPrimary)
 
                         ThingsTag("v\(app.version)", color: ThingsTheme.infoIndigo)
+
+                        if app.isRunning {
+                            ThingsTag("Running", color: ThingsTheme.starOchre)
+                        }
+
+                        if app.isSystemProtected {
+                            ThingsTag("Protected", color: ThingsTheme.textTertiary)
+                        } else {
+                            ThingsTag("User App", color: ThingsTheme.accent)
+                        }
                     }
 
-                    Text(app.bundleIdentifier)
+                    Text(app.bundleIdentifier.isEmpty ? "No bundle identifier" : app.bundleIdentifier)
                         .font(.system(size: 11))
                         .foregroundStyle(ThingsTheme.textSecondary)
 
@@ -242,44 +384,144 @@ public struct AppUninstallerView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(app.formattedTotalSize)
-                        .font(.system(size: 18, weight: .bold))
+                    Text(app.formattedReclaimableSize)
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(ThingsTheme.accent)
 
-                    Text("Total Space Reclaimable")
+                    Text("\(app.checkedResidueCount + (app.isBundleSelected && !app.isSystemProtected ? 1 : 0)) items selected")
                         .font(.system(size: 10))
                         .foregroundStyle(ThingsTheme.textTertiary)
                 }
             }
-            .padding(20)
+            .padding(18)
             .background(ThingsTheme.card)
 
             Divider().background(ThingsTheme.borderSubtle)
 
-            // Residue Breakdown List
+            // Status Banners & Warnings
+            if let result = uninstaller.lastResult, result.appName == app.name {
+                HStack(spacing: 8) {
+                    Image(systemName: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                        .foregroundStyle(result.succeeded ? ThingsTheme.accent : ThingsTheme.vitalCrimson)
+                    Text(result.succeeded ?
+                         "Moved \(result.itemsTrashed) items to macOS Trash (freed \(ByteCountFormatter.string(fromByteCount: result.bytesFreed, countStyle: .file)))." :
+                         (result.errorMessage ?? "Failed to move files to Trash."))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                    Spacer()
+                    Button {
+                        uninstaller.lastResult = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9))
+                            .foregroundStyle(ThingsTheme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(result.succeeded ? ThingsTheme.accent.opacity(0.1) : ThingsTheme.vitalCrimson.opacity(0.1))
+                Divider().background(ThingsTheme.borderSubtle)
+            }
+
+            if app.isSystemProtected {
+                HStack(spacing: 10) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(ThingsTheme.textSecondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("System Protected Application")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(ThingsTheme.textPrimary)
+                        Text(app.protectionReason ?? "This application cannot be uninstalled because it is protected by macOS.")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                    }
+                    Spacer()
+                }
+                .padding(12)
+                .background(ThingsTheme.cardRaised)
+                Divider().background(ThingsTheme.borderSubtle)
+            } else if app.isRunning {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(ThingsTheme.starOchre)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Application is Active")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(ThingsTheme.textPrimary)
+                        Text("\(app.name) is currently open in memory. Quit it before moving files to Trash.")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                    }
+                    Spacer()
+                    Button {
+                        Task {
+                            _ = await uninstaller.quitApplication(app)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            if uninstaller.isQuittingApp {
+                                ProgressView().scaleEffect(0.6)
+                            }
+                            Text("Quit App")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(ThingsTheme.starOchre.opacity(0.15))
+                        .foregroundStyle(ThingsTheme.starOchre)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(uninstaller.isQuittingApp)
+                }
+                .padding(12)
+                .background(ThingsTheme.starOchre.opacity(0.08))
+                Divider().background(ThingsTheme.borderSubtle)
+            }
+
+            // Package & Residue Breakdown List
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("PACKAGE FILES & ASSOCIATED RESIDUE")
-                        .font(.system(size: 10.5, weight: .bold))
-                        .foregroundStyle(ThingsTheme.textTertiary)
-                        .tracking(0.5)
+                    HStack {
+                        Text("FILES TO RECLAIM")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .foregroundStyle(ThingsTheme.textTertiary)
+                            .tracking(0.5)
 
-                    // 1. Application Bundle
-                    residueRow(
-                        name: "\(app.name).app (Executable Bundle)",
-                        path: app.bundleURL.path,
-                        size: app.appSize,
-                        category: "Application",
-                        isChecked: true
-                    )
+                        Spacer()
 
-                    // 2. Residue Items
+                        if !app.residueItems.isEmpty {
+                            Button("Select All") {
+                                uninstaller.toggleAllResidue(appID: app.id, checked: true)
+                            }
+                            .font(.system(size: 10, weight: .medium))
+                            .buttonStyle(.plain)
+                            .foregroundStyle(ThingsTheme.accent)
+
+                            Text("•").font(.system(size: 8)).foregroundStyle(ThingsTheme.textTertiary)
+
+                            Button("Deselect All") {
+                                uninstaller.toggleAllResidue(appID: app.id, checked: false)
+                            }
+                            .font(.system(size: 10, weight: .medium))
+                            .buttonStyle(.plain)
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                        }
+                    }
+
+                    // 1. Application Bundle Row
+                    bundleRow(app)
+
+                    // 2. Residue Items List
                     if app.residueItems.isEmpty {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 12))
                                 .foregroundStyle(ThingsTheme.accent)
-                            Text("No external Application Support or Cache clutter detected for this app.")
+                            Text("No external Application Support, Cache, or Container clutter detected.")
                                 .font(.system(size: 11))
                                 .foregroundStyle(ThingsTheme.textSecondary)
                         }
@@ -289,17 +531,11 @@ public struct AppUninstallerView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else {
                         ForEach(app.residueItems) { item in
-                            residueRow(
-                                name: item.name,
-                                path: item.path,
-                                size: item.size,
-                                category: item.categoryName,
-                                isChecked: item.isChecked
-                            )
+                            residueRow(app: app, item: item)
                         }
                     }
                 }
-                .padding(20)
+                .padding(18)
             }
 
             Divider().background(ThingsTheme.borderSubtle)
@@ -309,56 +545,110 @@ public struct AppUninstallerView: View {
                 Button {
                     NSWorkspace.shared.selectFile(app.bundleURL.path, inFileViewerRootedAtPath: "")
                 } label: {
-                    Text("Reveal in Finder")
-                        .font(.system(size: 11, weight: .medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(ThingsTheme.cardRaised)
-                        .foregroundStyle(ThingsTheme.textSecondary)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 11))
+                        Text("Reveal in Finder")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(ThingsTheme.cardRaised)
+                    .foregroundStyle(ThingsTheme.textSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
 
                 Spacer()
 
-                Button {
-                    showingUninstallAlert = true
-                } label: {
+                if app.isSystemProtected {
                     HStack(spacing: 6) {
-                        Image(systemName: "trash.fill")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("Uninstall & Move All to Trash")
-                            .font(.system(size: 12, weight: .bold))
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 11))
+                        Text("System Protected (Cannot Uninstall)")
+                            .font(.system(size: 11.5, weight: .semibold))
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(ThingsTheme.accent)
-                    .foregroundStyle(Color.white)
+                    .background(ThingsTheme.cardRaised)
+                    .foregroundStyle(ThingsTheme.textTertiary)
                     .clipShape(Capsule())
+                } else if app.isRunning {
+                    Button {
+                        showingUninstallAlert = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Quit & Move to Trash (\(app.formattedReclaimableSize))")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(ThingsTheme.starOchre)
+                        .foregroundStyle(Color.black)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(app.reclaimableBytes == 0 || isPerformingUninstall)
+                } else {
+                    Button {
+                        showingUninstallAlert = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isPerformingUninstall {
+                                ProgressView().scaleEffect(0.6)
+                            } else {
+                                Image(systemName: "trash.fill")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            Text(app.isBundleSelected ? "Uninstall (\(app.formattedReclaimableSize))" : "Clean Residue (\(app.formattedReclaimableSize))")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(app.reclaimableBytes > 0 ? ThingsTheme.accent : ThingsTheme.textTertiary)
+                        .foregroundStyle(Color.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(app.reclaimableBytes == 0 || isPerformingUninstall)
                 }
-                .buttonStyle(.plain)
             }
             .padding(14)
             .background(ThingsTheme.sidebar)
         }
     }
 
-    private func residueRow(name: String, path: String, size: Int64, category: String, isChecked: Bool) -> some View {
+    // MARK: - Bundle Row
+    private func bundleRow(_ app: InstalledAppInfo) -> some View {
         HStack(spacing: 10) {
-            ThingsCheckbox(isChecked: isChecked) {}
-                .disabled(true)
+            if app.isSystemProtected {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(ThingsTheme.textTertiary)
+                    .frame(width: 17, height: 17)
+            } else {
+                ThingsCheckbox(isChecked: app.isBundleSelected) {
+                    uninstaller.toggleBundleSelection(appID: app.id)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(name)
-                        .font(.system(size: 11.5, weight: .medium))
+                    Text("\(app.name).app (Application Bundle)")
+                        .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(ThingsTheme.textPrimary)
                         .lineLimit(1)
 
-                    ThingsTag(category, color: ThingsTheme.infoIndigo)
+                    ThingsTag("Executable", color: ThingsTheme.infoIndigo)
+
+                    if app.isSystemProtected {
+                        ThingsTag("SIP Locked", color: ThingsTheme.textTertiary)
+                    }
                 }
 
-                Text(path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                Text(app.bundleURL.path)
                     .font(.system(size: 10))
                     .foregroundStyle(ThingsTheme.textTertiary)
                     .lineLimit(1)
@@ -366,7 +656,7 @@ public struct AppUninstallerView: View {
 
             Spacer()
 
-            Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+            Text(ByteCountFormatter.string(fromByteCount: app.appSize, countStyle: .file))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(ThingsTheme.textPrimary)
         }
@@ -375,7 +665,97 @@ public struct AppUninstallerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(ThingsTheme.border, lineWidth: 1)
+                .strokeBorder(app.isBundleSelected && !app.isSystemProtected ? ThingsTheme.accent.opacity(0.3) : ThingsTheme.border, lineWidth: 1)
         )
+    }
+
+    // MARK: - Residue Row
+    private func residueRow(app: InstalledAppInfo, item: AppResidueItem) -> some View {
+        HStack(spacing: 10) {
+            ThingsCheckbox(isChecked: item.isChecked) {
+                uninstaller.toggleResidueItem(appID: app.id, residueID: item.id)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(item.name)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                        .lineLimit(1)
+
+                    ThingsTag(item.categoryName, color: ThingsTheme.infoIndigo)
+                }
+
+                Text(item.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                    .font(.system(size: 10))
+                    .foregroundStyle(ThingsTheme.textTertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Button {
+                NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+            } label: {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ThingsTheme.textTertiary)
+                    .padding(4)
+            }
+            .buttonStyle(.plain)
+            .help("Reveal file in Finder")
+
+            Text(item.formattedSize)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ThingsTheme.textPrimary)
+        }
+        .padding(10)
+        .background(ThingsTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(item.isChecked ? ThingsTheme.accent.opacity(0.3) : ThingsTheme.border, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Drag and Drop Handler
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+
+        // Attempt 1: loadObject as URL
+        if provider.canLoadObject(ofClass: URL.self) {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                if let url = url, url.pathExtension == "app" {
+                    DispatchQueue.main.async {
+                        uninstaller.inspectCustomApp(url: url)
+                    }
+                }
+            }
+            return true
+        }
+
+        // Attempt 2: loadItem for type identifiers
+        let types = ["public.file-url", UTType.fileURL.identifier, UTType.application.identifier]
+        for type in types {
+            if provider.hasItemConformingToTypeIdentifier(type) {
+                provider.loadItem(forTypeIdentifier: type, options: nil) { item, _ in
+                    var targetURL: URL?
+                    if let url = item as? URL {
+                        targetURL = url
+                    } else if let data = item as? Data,
+                              let str = String(data: data, encoding: .utf8),
+                              let url = URL(string: str.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                        targetURL = url
+                    }
+                    if let url = targetURL, url.pathExtension == "app" {
+                        DispatchQueue.main.async {
+                            uninstaller.inspectCustomApp(url: url)
+                        }
+                    }
+                }
+                return true
+            }
+        }
+        return false
     }
 }
