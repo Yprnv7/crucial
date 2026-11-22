@@ -29,10 +29,16 @@ public struct MainWindowView: View {
                 switch windowManager.selectedNav {
                 case .dashboard:
                     dashboardView
+                case .uninstaller:
+                    AppUninstallerView()
                 case .diskMap:
                     DiskSunburstView()
                 case .duplicates:
                     DuplicatesView()
+                case .maintenance:
+                    SystemMaintenanceView()
+                case .startup:
+                    StartupManagerView()
                 case .category(let category):
                     categoryDrilldownView(category: category)
                 case .fileFinder:
@@ -182,7 +188,18 @@ public struct MainWindowView: View {
                         windowManager.selectedNav = .dashboard
                     }
 
-                    // 2. Visual Storage Treemap
+                    // 2. App Uninstaller
+                    thingsNavRow(
+                        title: "App Uninstaller",
+                        icon: "trash.circle.fill",
+                        tintColor: ThingsTheme.accent,
+                        badge: AppUninstallerService.shared.installedApps.isEmpty ? nil : "\(AppUninstallerService.shared.installedApps.count)",
+                        isSelected: windowManager.selectedNav == .uninstaller
+                    ) {
+                        windowManager.selectedNav = .uninstaller
+                    }
+
+                    // 3. Visual Storage Treemap
                     thingsNavRow(
                         title: "Storage Treemap",
                         icon: "chart.pie.fill",
@@ -193,7 +210,7 @@ public struct MainWindowView: View {
                         windowManager.selectedNav = .diskMap
                     }
 
-                    // 3. Duplicate File Finder
+                    // 4. Duplicate File Finder
                     thingsNavRow(
                         title: "Duplicate Finder",
                         icon: "doc.on.doc.fill",
@@ -204,7 +221,29 @@ public struct MainWindowView: View {
                         windowManager.selectedNav = .duplicates
                     }
 
-                    // 4. Crucial Assistant (Conversational AI)
+                    // 5. System Maintenance
+                    thingsNavRow(
+                        title: "System Maintenance",
+                        icon: "wrench.and.screwdriver.fill",
+                        tintColor: ThingsTheme.glacierCyan,
+                        badge: nil,
+                        isSelected: windowManager.selectedNav == .maintenance
+                    ) {
+                        windowManager.selectedNav = .maintenance
+                    }
+
+                    // 6. Startup Daemons & LaunchAgents
+                    thingsNavRow(
+                        title: "Startup Daemons",
+                        icon: "bolt.fill",
+                        tintColor: ThingsTheme.starOchre,
+                        badge: nil,
+                        isSelected: windowManager.selectedNav == .startup
+                    ) {
+                        windowManager.selectedNav = .startup
+                    }
+
+                    // 7. Crucial Assistant (Conversational AI)
                     thingsNavRow(
                         title: "Crucial Assistant",
                         icon: "bubble.left.and.bubble.right.fill",
@@ -215,7 +254,7 @@ public struct MainWindowView: View {
                         windowManager.selectedNav = .assistant
                     }
 
-                    // 5. Deep File Finder
+                    // 8. Deep File Finder
                     thingsNavRow(
                         title: "Deep File Finder",
                         icon: "magnifyingglass",
