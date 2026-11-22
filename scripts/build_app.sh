@@ -22,6 +22,11 @@ mkdir -p "$RESOURCES_DIR"
 cp ".build/release/Crucial" "$MACOS_DIR/Crucial"
 chmod +x "$MACOS_DIR/Crucial"
 
+# Copy AppIcon.icns if available
+if [ -f "$DIR/resources/AppIcon.icns" ]; then
+    cp "$DIR/resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+fi
+
 # Create Info.plist
 cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -30,6 +35,8 @@ cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
 <dict>
     <key>CFBundleExecutable</key>
     <string>Crucial</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.crucial.cleaner</string>
     <key>CFBundleName</key>
