@@ -4,6 +4,7 @@ import AppKit
 public struct MenuBarView: View {
     @ObservedObject var scanner = FileScannerService.shared
     @ObservedObject var trashService = SafetyTrashService.shared
+    @ObservedObject var cpuMonitor = CPUMonitorService.shared
     @State private var showingFinder = false
     @State private var showingSettings = false
     @State private var showingCleanAlert = false
@@ -173,6 +174,31 @@ public struct MenuBarView: View {
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(.green)
                 }
+            }
+
+            HStack {
+                Circle()
+                    .fill(cpuMonitor.cpuPercent > 50 ? Color.red : (cpuMonitor.cpuPercent > 15 ? Color.orange : Color.green))
+                    .frame(width: 5, height: 5)
+                Text(String(format: "CPU: %.1f%%", cpuMonitor.cpuPercent))
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    scanner.pacingMode = (scanner.pacingMode == .pacedBurst) ? .turbo : .pacedBurst
+                } label: {
+                    Text(scanner.pacingMode == .pacedBurst ? "⚡ Paced (10%)" : "🚀 Turbo (97%)")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(scanner.pacingMode == .pacedBurst ? .green : .orange)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.12))
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle between Paced Bursts (~10% CPU) and Turbo Mode (97% CPU)")
             }
         }
     }

@@ -5,6 +5,7 @@ public struct MainWindowView: View {
     @ObservedObject var windowManager = WindowManager.shared
     @ObservedObject var scanner = FileScannerService.shared
     @ObservedObject var trashService = SafetyTrashService.shared
+    @ObservedObject var cpuMonitor = CPUMonitorService.shared
 
     @State private var searchText: String = ""
     @State private var filterLevel: VitalityLevel? = nil
@@ -363,6 +364,50 @@ public struct MainWindowView: View {
                 Text("✨ \(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file)) Cleanable")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.green)
+            }
+
+            Divider()
+                .padding(.vertical, 2)
+
+            // Real-Time CPU & Pacing Controller
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(cpuMonitor.cpuPercent > 50 ? Color.red : (cpuMonitor.cpuPercent > 15 ? Color.orange : Color.green))
+                    .frame(width: 6, height: 6)
+
+                Text(String(format: "CPU: %.1f%%", cpuMonitor.cpuPercent))
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(cpuMonitor.cpuPercent > 50 ? Color.red : Color.primary)
+
+                Spacer()
+
+                Menu {
+                    Button {
+                        scanner.pacingMode = .pacedBurst
+                    } label: {
+                        Label("🟢 Paced Bursts (~10% CPU)", systemImage: scanner.pacingMode == .pacedBurst ? "checkmark" : "")
+                    }
+
+                    Button {
+                        scanner.pacingMode = .turbo
+                    } label: {
+                        Label("🚀 Turbo Full Speed (97% CPU)", systemImage: scanner.pacingMode == .turbo ? "checkmark" : "")
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(scanner.pacingMode == .pacedBurst ? "Paced (10%)" : "Turbo (97%)")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.12))
+                    .cornerRadius(4)
+                }
+                .menuStyle(.borderlessButton)
             }
         }
         .padding(10)

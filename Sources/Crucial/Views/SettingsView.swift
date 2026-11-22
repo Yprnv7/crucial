@@ -4,6 +4,8 @@ import AppKit
 public struct SettingsView: View {
     @ObservedObject var permissions = PermissionsService.shared
     @ObservedObject var trashService = SafetyTrashService.shared
+    @ObservedObject var scanner = FileScannerService.shared
+    @ObservedObject var cpuMonitor = CPUMonitorService.shared
     @State private var apiKeyInput: String = ""
     @State private var isSavedMessageShowing: Bool = false
 
@@ -35,6 +37,36 @@ public struct SettingsView: View {
                 .padding(.vertical, 4)
             } header: {
                 Text("macOS Permissions")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("Scan Mode", selection: $scanner.pacingMode) {
+                        ForEach(ScanPacingMode.allCases) { mode in
+                            Text(mode == .pacedBurst ? "Paced (~10%)" : "Turbo (97%)").tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(scanner.pacingMode.subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+
+                    HStack {
+                        Text("Live Process CPU Usage:")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Circle()
+                            .fill(cpuMonitor.cpuPercent > 50 ? Color.red : (cpuMonitor.cpuPercent > 15 ? Color.orange : Color.green))
+                            .frame(width: 6, height: 6)
+                        Text(String(format: "%.1f%%", cpuMonitor.cpuPercent))
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Scanner CPU & Performance")
             }
 
             Section {
