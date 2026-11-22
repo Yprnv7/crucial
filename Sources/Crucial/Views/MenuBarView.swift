@@ -100,6 +100,15 @@ public struct MenuBarView: View {
             Spacer()
 
             Button {
+                WindowManager.shared.focusMainWindow()
+            } label: {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .help("Open Full Crucial Application")
+
+            Button {
                 Task {
                     await scanner.scanQuickCleanDashboard()
                 }
@@ -206,72 +215,98 @@ public struct MenuBarView: View {
         let totalSize = items.reduce(0) { $0 + $1.size }
         let formatted = ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
 
-        return HStack(spacing: 10) {
-            Image(systemName: category.iconName)
-                .font(.system(size: 14))
-                .foregroundStyle(category.color)
-                .frame(width: 26, height: 26)
-                .background(category.color.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+        return Button {
+            WindowManager.shared.openCategory(category)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: category.iconName)
+                    .font(.system(size: 14))
+                    .foregroundStyle(category.color)
+                    .frame(width: 26, height: 26)
+                    .background(category.color.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                Text(subtitle)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                    Text(subtitle)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(formatted)
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(totalSize > 0 ? Color.primary : Color.secondary)
+
+                    HStack(spacing: 3) {
+                        Text("\(items.count) files")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(formatted)
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(totalSize > 0 ? .primary : .secondary)
-
-                Text("\(items.count) items")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+            .cornerRadius(8)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-        .cornerRadius(8)
+        .buttonStyle(.plain)
     }
 
     private var actionFooter: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 8) {
             Button {
-                showingCleanAlert = true
+                WindowManager.shared.focusMainWindow()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "trash.fill")
-                    Text("Clean Safe (\(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file)))")
+                    Image(systemName: "macwindow.on.rectangle")
+                    Text("Open Crucial App & Inspect Files")
                         .fontWeight(.semibold)
                 }
                 .font(.system(size: 12))
                 .frame(maxWidth: .infinity)
-                .frame(height: 32)
+                .frame(height: 30)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.green)
-            .disabled(scanner.totalCleanableBytes == 0 || scanner.isScanning)
+            .tint(.purple)
 
-            Button {
-                WindowManager.shared.openFinderWindow()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
-                    Text("Finder")
+            HStack(spacing: 8) {
+                Button {
+                    showingCleanAlert = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash.fill")
+                        Text("Clean Safe (\(ByteCountFormatter.string(fromByteCount: scanner.totalCleanableBytes, countStyle: .file)))")
+                            .fontWeight(.semibold)
+                    }
+                    .font(.system(size: 11))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
                 }
-                .font(.system(size: 12, weight: .medium))
-                .frame(height: 32)
-                .padding(.horizontal, 12)
+                .buttonStyle(.bordered)
+                .disabled(scanner.totalCleanableBytes == 0 || scanner.isScanning)
+
+                Button {
+                    WindowManager.shared.navigate(to: .fileFinder)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "magnifyingglass")
+                        Text("Finder")
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(height: 28)
+                    .padding(.horizontal, 10)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
-            .help("Pop out deep File Finder and AI Vitality Inspector")
         }
     }
 
