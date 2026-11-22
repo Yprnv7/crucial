@@ -16,6 +16,53 @@ public final class GeminiExplainerService: Sendable {
         UserDefaults.standard.set(key.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "crucial_gemini_api_key")
     }
 
+    public func testConnection() async -> (success: Bool, message: String) {
+        guard let key = apiKey, !key.isEmpty else {
+            return (false, "No API key configured")
+        }
+
+        guard let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=\(key)") else {
+            return (false, "Invalid endpoint URL")
+        }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 8
+
+        let requestBody: [String: Any] = [
+            "contents": [
+                [
+                    "parts": [
+                        ["text": "ping"]
+                    ]
+                ]
+            ]
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return (false, "Invalid server response")
+            }
+
+            if httpResponse.statusCode == 200 {
+                return (true, "Connected successfully! (Gemini 3.5 Flash Lite)")
+            } else {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorObj = json["error"] as? [String: Any],
+                   let msg = errorObj["message"] as? String {
+                    return (false, "API Error (\(httpResponse.statusCode)): \(msg)")
+                }
+                return (false, "HTTP \(httpResponse.statusCode) response")
+            }
+        } catch {
+            return (false, error.localizedDescription)
+        }
+    }
+
     public func explain(item: FileItem) async -> VitalityAssessment {
         guard let key = apiKey, !key.isEmpty else {
             return item.assessment
@@ -38,82 +85,87 @@ public final class GeminiExplainerService: Sendable {
           "canBeRebuilt": (boolean),
           "rebuildCommand": (string or null if can't be rebuilt)
         }
-        Do not wrap with markdown code fences if possible, or provide raw JSON.
         """
 
-        guard let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(key)") else {
-            return item.assessment
-        }
+        // Try gemini-flash-lite-latest (fastest & most reliable)
+        let modelCandidates = ["gemini-flash-lite-latest", "gemini-flash-latest"]
 
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for model in modelCandidates {
+            guard let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(key)") else {
+                continue
+            }
 
-        let requestBody: [String: Any] = [
-            "contents": [
-                [
-                    "parts": [
-                        ["text": prompt]
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 12
+
+            let requestBody: [String: Any] = [
+                "contents": [
+                    [
+                        "parts": [
+                            ["text": prompt]
+                        ]
                     ]
+                ],
+                "generationConfig": [
+                    "responseMimeType": "application/json"
                 ]
-            ],
-            "generationConfig": [
-                "responseMimeType": "application/json"
             ]
-        ]
 
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-            let (data, response) = try await URLSession.shared.data(for: request)
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+                let (data, response) = try await URLSession.shared.data(for: request)
 
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                return item.assessment
-            }
-
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let candidates = json["candidates"] as? [[String: Any]],
-                  let firstCandidate = candidates.first,
-                  let content = firstCandidate["content"] as? [String: Any],
-                  let parts = content["parts"] as? [[String: Any]],
-                  let text = parts.first?["text"] as? String else {
-                return item.assessment
-            }
-
-            let cleanJsonString = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                .replacingOccurrences(of: "```json", with: "")
-                .replacingOccurrences(of: "```", with: "")
-
-            if let parsedData = cleanJsonString.data(using: .utf8),
-               let parsed = try? JSONSerialization.jsonObject(with: parsedData) as? [String: Any] {
-                let levelStr = parsed["level"] as? String ?? item.assessment.level.rawValue
-                let level: VitalityLevel
-                if levelStr.contains("Safe") {
-                    level = .safeToDelete
-                } else if levelStr.contains("Vital") || levelStr.contains("Protected") {
-                    level = .vital
-                } else {
-                    level = .caution
+                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                    continue
                 }
 
-                let riskScore = parsed["riskScore"] as? Int ?? item.assessment.riskScore
-                let summary = parsed["summary"] as? String ?? item.assessment.summary
-                let impact = parsed["impact"] as? String ?? item.assessment.impact
-                let canRebuild = parsed["canBeRebuilt"] as? Bool ?? item.assessment.canBeRebuilt
-                let rebuildCmd = parsed["rebuildCommand"] as? String
+                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let candidates = json["candidates"] as? [[String: Any]],
+                      let firstCandidate = candidates.first,
+                      let content = firstCandidate["content"] as? [String: Any],
+                      let parts = content["parts"] as? [[String: Any]],
+                      let text = parts.first?["text"] as? String else {
+                    continue
+                }
 
-                return VitalityAssessment(
-                    level: level,
-                    riskScore: riskScore,
-                    category: item.category,
-                    summary: summary,
-                    impact: impact,
-                    canBeRebuilt: canRebuild,
-                    rebuildCommand: rebuildCmd,
-                    aiGenerated: true
-                )
+                let cleanJsonString = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "```json", with: "")
+                    .replacingOccurrences(of: "```", with: "")
+
+                if let parsedData = cleanJsonString.data(using: .utf8),
+                   let parsed = try? JSONSerialization.jsonObject(with: parsedData) as? [String: Any] {
+                    let levelStr = parsed["level"] as? String ?? item.assessment.level.rawValue
+                    let level: VitalityLevel
+                    if levelStr.contains("Safe") {
+                        level = .safeToDelete
+                    } else if levelStr.contains("Vital") || levelStr.contains("Protected") {
+                        level = .vital
+                    } else {
+                        level = .caution
+                    }
+
+                    let riskScore = parsed["riskScore"] as? Int ?? item.assessment.riskScore
+                    let summary = parsed["summary"] as? String ?? item.assessment.summary
+                    let impact = parsed["impact"] as? String ?? item.assessment.impact
+                    let canRebuild = parsed["canBeRebuilt"] as? Bool ?? item.assessment.canBeRebuilt
+                    let rebuildCmd = parsed["rebuildCommand"] as? String
+
+                    return VitalityAssessment(
+                        level: level,
+                        riskScore: riskScore,
+                        category: item.category,
+                        summary: summary,
+                        impact: impact,
+                        canBeRebuilt: canRebuild,
+                        rebuildCommand: rebuildCmd,
+                        aiGenerated: true
+                    )
+                }
+            } catch {
+                continue
             }
-        } catch {
-            return item.assessment
         }
 
         return item.assessment

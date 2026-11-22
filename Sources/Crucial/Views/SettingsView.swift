@@ -8,6 +8,8 @@ public struct SettingsView: View {
     @ObservedObject var cpuMonitor = CPUMonitorService.shared
     @State private var apiKeyInput: String = ""
     @State private var isSavedMessageShowing: Bool = false
+    @State private var isTestingConnection: Bool = false
+    @State private var connectionStatus: (success: Bool, message: String)? = nil
 
     public init() {}
 
@@ -76,22 +78,45 @@ public struct SettingsView: View {
                         .foregroundStyle(.secondary)
 
                     HStack {
-                        SecureField("AI API Key (optional)", text: $apiKeyInput)
+                        SecureField("AI API Key", text: $apiKeyInput)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 12, design: .monospaced))
 
                         Button("Save") {
                             GeminiExplainerService.shared.setApiKey(apiKeyInput)
                             isSavedMessageShowing = true
+                            runConnectionTest()
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                                 isSavedMessageShowing = false
                             }
                         }
                         .disabled(apiKeyInput.isEmpty)
+
+                        Button {
+                            runConnectionTest()
+                        } label: {
+                            if isTestingConnection {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Text("Test")
+                            }
+                        }
+                        .disabled(apiKeyInput.isEmpty || isTestingConnection)
                     }
 
-                    if isSavedMessageShowing {
-                        Text("API Key saved successfully!")
+                    if let status = connectionStatus {
+                        HStack(spacing: 5) {
+                            Image(systemName: status.success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                .foregroundStyle(status.success ? .green : .red)
+                            Text(status.message)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(status.success ? .green : .red)
+                        }
+                        .padding(.top, 2)
+                    } else if isSavedMessageShowing {
+                        Text("API Key saved!")
                             .font(.system(size: 11))
                             .foregroundStyle(.green)
                     }
@@ -125,6 +150,20 @@ public struct SettingsView: View {
         .onAppear {
             apiKeyInput = GeminiExplainerService.shared.apiKey ?? ""
             permissions.checkPermissions()
+            if !apiKeyInput.isEmpty {
+                runConnectionTest()
+            }
+        }
+    }
+
+    private func runConnectionTest() {
+        Task {
+            isTestingConnection = true
+            let result = await GeminiExplainerService.shared.testConnection()
+            await MainActor.run {
+                self.connectionStatus = result
+                self.isTestingConnection = false
+            }
         }
     }
 }
