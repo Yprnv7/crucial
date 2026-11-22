@@ -6,7 +6,7 @@ public struct AppUninstallerView: View {
     @ObservedObject var uninstaller = AppUninstallerService.shared
     @State private var searchText = ""
     @State private var selectedFilter: AppFilterCategory = .all
-    @State private var showingUninstallAlert = false
+    @State private var showingUninstallConfirmation = false
     @State private var isTargetedForDrop = false
     @State private var isPerformingUninstall = false
 
@@ -46,7 +46,8 @@ public struct AppUninstallerView: View {
     }
 
     public var body: some View {
-        HSplitView {
+        ZStack {
+            HSplitView {
             // MARK: - Left Pane: App List & Filter
             VStack(spacing: 0) {
                 // Header & Action Bar
@@ -225,40 +226,33 @@ public struct AppUninstallerView: View {
             .frame(minWidth: 460, maxWidth: .infinity)
             .background(ThingsTheme.canvas)
         }
-        .onAppear {
-            if uninstaller.installedApps.isEmpty && !uninstaller.isScanning {
-                Task {
-                    await uninstaller.scanInstalledApplications()
-                }
-            }
-        }
-        .alert(isPresented: $showingUninstallAlert) {
-            guard let app = uninstaller.selectedApp else {
-                return Alert(title: Text("Error"))
-            }
 
-            let willTrashBundle = app.isBundleSelected && !app.isSystemProtected
-            let _ = app.checkedResidueCount + (willTrashBundle ? 1 : 0)
-
-            let title = willTrashBundle ? "Completely Uninstall \(app.name)?" : "Clean Selected Residue for \(app.name)?"
-            let message = willTrashBundle ?
-                "Crucial will safely stage the application bundle and \(app.checkedResidueCount) selected support files (\(app.formattedReclaimableSize)) into your macOS Trash. You can restore them from Trash anytime." :
-                "Crucial will safely stage \(app.checkedResidueCount) selected support files (\(app.formattedReclaimableSize)) into your macOS Trash while preserving the application bundle."
-
-            return Alert(
-                title: Text(title),
-                message: Text(message),
-                primaryButton: .destructive(Text("Move to Trash")) {
-                    isPerformingUninstall = true
-                    Task {
-                        _ = await uninstaller.uninstallApp(app)
-                        isPerformingUninstall = false
+        // In-Window Things 3 Confirmation Modal Overlay
+        if showingUninstallConfirmation, let app = uninstaller.selectedApp {
+            Color.black.opacity(0.45)
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    if !isPerformingUninstall {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            showingUninstallConfirmation = false
+                        }
                     }
-                },
-                secondaryButton: .cancel(Text("Cancel"))
-            )
+                }
+
+            uninstallConfirmationCard(app: app)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(100)
         }
     }
+    .onAppear {
+        if uninstaller.installedApps.isEmpty && !uninstaller.isScanning {
+            Task {
+                await uninstaller.scanInstalledApplications()
+            }
+        }
+    }
+}
 
     private func countForCategory(_ category: AppFilterCategory) -> Int {
         switch category {
@@ -575,7 +569,9 @@ public struct AppUninstallerView: View {
                     .clipShape(Capsule())
                 } else if app.isRunning {
                     Button {
-                        showingUninstallAlert = true
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
+                            showingUninstallConfirmation = true
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -593,7 +589,9 @@ public struct AppUninstallerView: View {
                     .disabled(app.reclaimableBytes == 0 || isPerformingUninstall)
                 } else {
                     Button {
-                        showingUninstallAlert = true
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
+                            showingUninstallConfirmation = true
+                        }
                     } label: {
                         HStack(spacing: 6) {
                             if isPerformingUninstall {
@@ -716,6 +714,181 @@ public struct AppUninstallerView: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(item.isChecked ? ThingsTheme.accent.opacity(0.3) : ThingsTheme.border, lineWidth: 1)
         )
+    }
+
+    // MARK: - In-Window Confirmation Modal Card
+    private func uninstallConfirmationCard(app: InstalledAppInfo) -> some View {
+        let willTrashBundle = app.isBundleSelected && !app.isSystemProtected
+
+        return VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(ThingsTheme.vitalCrimson.opacity(0.12))
+                        .frame(width: 42, height: 42)
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(ThingsTheme.vitalCrimson)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(willTrashBundle ? "Completely Uninstall \(app.name)?" : "Clean Selected Residue for \(app.name)?")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                    Text("Safe stage to macOS Trash • Restorable anytime")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ThingsTheme.textSecondary)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showingUninstallConfirmation = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(ThingsTheme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .disabled(isPerformingUninstall)
+            }
+
+            Divider().background(ThingsTheme.borderSubtle)
+
+            // Content Summary
+            Text("Crucial will safely move \(app.formattedReclaimableSize) into your macOS Trash:")
+                .font(.system(size: 11.5))
+                .foregroundStyle(ThingsTheme.textSecondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                if willTrashBundle {
+                    HStack(spacing: 8) {
+                        Image(systemName: "app.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(ThingsTheme.accent)
+                        Text("\(app.name).app (Application Bundle)")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(ThingsTheme.textPrimary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: app.appSize, countStyle: .file))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(ThingsTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+
+                if app.checkedResidueCount > 0 {
+                    HStack(spacing: 8) {
+                        Image(systemName: "tray.full.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(ThingsTheme.infoIndigo)
+                        Text("\(app.checkedResidueCount) support folders, caches & preferences")
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundStyle(ThingsTheme.textPrimary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: app.checkedResidueBytes, countStyle: .file))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(ThingsTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+
+            if app.isRunning {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(ThingsTheme.starOchre)
+                    Text("\(app.name) is currently open in memory. Crucial will quit the app cleanly before moving files.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ThingsTheme.starOchre)
+                }
+                .padding(9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(ThingsTheme.starOchre.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            Divider().background(ThingsTheme.borderSubtle)
+
+            // Actions
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showingUninstallConfirmation = false
+                    }
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(ThingsTheme.card)
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(ThingsTheme.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .disabled(isPerformingUninstall)
+
+                Spacer()
+
+                Button {
+                    isPerformingUninstall = true
+                    Task {
+                        _ = await uninstaller.uninstallApp(app)
+                        isPerformingUninstall = false
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            showingUninstallConfirmation = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isPerformingUninstall {
+                            ProgressView().scaleEffect(0.6)
+                            Text("Moving to Trash...")
+                                .font(.system(size: 12, weight: .bold))
+                        } else {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 11, weight: .bold))
+                            Text(willTrashBundle ? "Move to Trash" : "Clean Residue")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 7)
+                    .background(ThingsTheme.vitalCrimson)
+                    .foregroundStyle(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+                .disabled(isPerformingUninstall)
+            }
+        }
+        .padding(20)
+        .frame(width: 450)
+        .background(ThingsTheme.cardRaised)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(ThingsTheme.border, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 24, y: 10)
     }
 
     // MARK: - Drag and Drop Handler

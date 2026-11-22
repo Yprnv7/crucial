@@ -434,8 +434,7 @@ public final class AppUninstallerService: ObservableObject {
         var trashedResidueIDs: Set<UUID> = []
         for residue in app.residueItems where residue.isChecked {
             do {
-                var trashedURL: NSURL?
-                try FileManager.default.trashItem(at: residue.url, resultingItemURL: &trashedURL)
+                try trashItemSafely(url: residue.url)
                 totalFreed += residue.size
                 itemsCount += 1
                 trashedResidueIDs.insert(residue.id)
@@ -448,8 +447,7 @@ public final class AppUninstallerService: ObservableObject {
         var bundleTrashed = false
         if app.isBundleSelected {
             do {
-                var trashedBundleURL: NSURL?
-                try FileManager.default.trashItem(at: app.bundleURL, resultingItemURL: &trashedBundleURL)
+                try trashItemSafely(url: app.bundleURL)
                 totalFreed += app.appSize
                 itemsCount += 1
                 bundleTrashed = true
@@ -506,6 +504,24 @@ public final class AppUninstallerService: ObservableObject {
             )
             self.lastResult = result
             return result
+        }
+    }
+
+    private func trashItemSafely(url: URL) throws {
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            let script = "tell application \"Finder\" to delete POSIX file \"\(url.path)\""
+            var errorDict: NSDictionary?
+            if let appleScript = NSAppleScript(source: script) {
+                appleScript.executeAndReturnError(&errorDict)
+                if let errorDict = errorDict {
+                    let msg = errorDict[NSAppleScript.errorMessage] as? String ?? error.localizedDescription
+                    throw NSError(domain: "CrucialTrash", code: 1, userInfo: [NSLocalizedDescriptionKey: msg])
+                }
+            } else {
+                throw error
+            }
         }
     }
 

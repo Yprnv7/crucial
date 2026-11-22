@@ -9,7 +9,8 @@ public struct DuplicatesView: View {
     public init() {}
 
     public var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            VStack(spacing: 0) {
             // Header Bar (Things 3 Grand Header)
             HStack(spacing: 12) {
                 ZStack {
@@ -139,17 +140,23 @@ public struct DuplicatesView: View {
                 }
             }
         }
-        .alert(isPresented: $showingTrashAllAlert) {
-            Alert(
-                title: Text("Purge All Duplicate Copies"),
-                message: Text("Crucial will preserve all original files and safely stage \(ByteCountFormatter.string(fromByteCount: dupService.totalWastedBytes, countStyle: .file)) of redundant duplicates into macOS Trash."),
-                primaryButton: .destructive(Text("Move to Trash")) {
-                    dupService.trashAllDuplicates()
-                },
-                secondaryButton: .cancel(Text("Cancel"))
-            )
+
+        if showingTrashAllAlert {
+            Color.black.opacity(0.45)
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showingTrashAllAlert = false
+                    }
+                }
+
+            purgeDuplicatesConfirmationCard
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(100)
         }
     }
+}
 
     private func duplicateGroupCard(_ group: CryptoDuplicateGroup) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -251,5 +258,104 @@ public struct DuplicatesView: View {
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(ThingsTheme.border, lineWidth: 1)
         )
+    }
+
+    private var purgeDuplicatesConfirmationCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(ThingsTheme.vitalCrimson.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(ThingsTheme.vitalCrimson)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Purge All Duplicate Copies?")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                    Text("Original files will be preserved untouched")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ThingsTheme.textSecondary)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showingTrashAllAlert = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(ThingsTheme.textTertiary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Divider().background(ThingsTheme.borderSubtle)
+
+            Text("Crucial will safely stage \(ByteCountFormatter.string(fromByteCount: dupService.totalWastedBytes, countStyle: .file)) of redundant duplicates into macOS Trash. Original master files remain untouched.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(ThingsTheme.textSecondary)
+
+            Divider().background(ThingsTheme.borderSubtle)
+
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showingTrashAllAlert = false
+                    }
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(ThingsTheme.card)
+                        .foregroundStyle(ThingsTheme.textPrimary)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(ThingsTheme.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button {
+                    dupService.trashAllDuplicates()
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        showingTrashAllAlert = false
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Move All Copies to Trash")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 7)
+                    .background(ThingsTheme.vitalCrimson)
+                    .foregroundStyle(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+        .background(ThingsTheme.cardRaised)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(ThingsTheme.border, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 24, y: 10)
     }
 }
