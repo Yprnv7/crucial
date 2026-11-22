@@ -5,6 +5,7 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
     case dashboard
     case category(JunkCategory)
     case fileFinder
+    case assistant
     case settings
 
     public var id: String {
@@ -15,6 +16,8 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
             return "category_\(cat.rawValue)"
         case .fileFinder:
             return "fileFinder"
+        case .assistant:
+            return "assistant"
         case .settings:
             return "settings"
         }
@@ -28,8 +31,10 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
             return cat.rawValue
         case .fileFinder:
             return "Deep File Finder"
+        case .assistant:
+            return "Crucial Assistant"
         case .settings:
-            return "Settings & AI"
+            return "Settings & System"
         }
     }
 
@@ -41,6 +46,8 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
             return cat.iconName
         case .fileFinder:
             return "magnifyingglass"
+        case .assistant:
+            return "bubble.left.and.sparkles.fill"
         case .settings:
             return "gearshape.fill"
         }
@@ -54,6 +61,8 @@ public enum CrucialNavSection: Hashable, Identifiable, Sendable {
             return cat.color
         case .fileFinder:
             return .green
+        case .assistant:
+            return .purple
         case .settings:
             return .gray
         }

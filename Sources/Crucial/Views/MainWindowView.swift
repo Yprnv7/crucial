@@ -33,6 +33,8 @@ public struct MainWindowView: View {
                     categoryDrilldownView(category: category)
                 case .fileFinder:
                     FileFinderView()
+                case .assistant:
+                    CrucialAssistantView()
                 case .settings:
                     SettingsView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -169,6 +171,15 @@ public struct MainWindowView: View {
                         .padding(.top, 8)
 
                     sidebarNavRow(
+                        title: "Crucial Assistant",
+                        icon: "bubble.left.and.sparkles.fill",
+                        color: .purple,
+                        isSelected: windowManager.selectedNav == .assistant
+                    ) {
+                        windowManager.selectedNav = .assistant
+                    }
+
+                    sidebarNavRow(
                         title: "Deep File Finder",
                         icon: "magnifyingglass",
                         color: .green,
@@ -178,7 +189,7 @@ public struct MainWindowView: View {
                     }
 
                     sidebarNavRow(
-                        title: "Settings & AI",
+                        title: "Settings & System",
                         icon: "gearshape.fill",
                         color: .gray,
                         isSelected: windowManager.selectedNav == .settings
@@ -1014,18 +1025,34 @@ public struct MainWindowView: View {
                     }
                 }
 
-                // AI Deep Analysis Button
-                if !item.assessment.aiGenerated {
+                // Ask Crucial Assistant
+                Button {
+                    CrucialChatService.shared.askAbout(item: item)
+                    windowManager.selectedNav = .assistant
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.left.and.sparkles.fill")
+                        Text("Ask Crucial Assistant about this file")
+                    }
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
+
+                // Optional Cloud AI Fallback
+                if GeminiExplainerService.shared.apiKey != nil && !item.assessment.aiGenerated {
                     Button {
                         triggerDeepAiAnalysis(item: item)
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
-                            Text("Deep AI Explanation (Gemini)")
+                            Text("Query Gemini Cloud AI")
                         }
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 10, weight: .medium))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 4)
                     }
                     .buttonStyle(.bordered)
                 }

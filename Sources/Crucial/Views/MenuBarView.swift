@@ -321,6 +321,19 @@ public struct MenuBarView: View {
                 .disabled(scanner.totalCleanableBytes == 0 || scanner.isScanning)
 
                 Button {
+                    WindowManager.shared.navigate(to: .assistant)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bubble.left.and.sparkles.fill")
+                        Text("Assistant")
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(height: 28)
+                    .padding(.horizontal, 8)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
                     WindowManager.shared.navigate(to: .fileFinder)
                 } label: {
                     HStack(spacing: 4) {
@@ -329,7 +342,7 @@ public struct MenuBarView: View {
                     }
                     .font(.system(size: 11, weight: .medium))
                     .frame(height: 28)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 8)
                 }
                 .buttonStyle(.bordered)
             }
