@@ -389,20 +389,6 @@ public struct FileFinderView: View {
 
     private func selectItemAndExplain(_ item: FileItem) {
         self.selectedItem = item
-
-        // Automatic AI Explanation
-        if GeminiExplainerService.shared.apiKey != nil {
-            Task {
-                await MainActor.run { isAiExplaining = true }
-                let newAssessment = await GeminiExplainerService.shared.explain(item: item)
-                await MainActor.run {
-                    if self.selectedItem?.id == item.id {
-                        self.selectedItem?.assessment = newAssessment
-                    }
-                    self.isAiExplaining = false
-                }
-            }
-        }
     }
 
     private func trashItem(_ item: FileItem) {

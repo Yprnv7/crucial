@@ -6,10 +6,7 @@ public struct SettingsView: View {
     @ObservedObject var trashService = SafetyTrashService.shared
     @ObservedObject var scanner = FileScannerService.shared
     @ObservedObject var cpuMonitor = CPUMonitorService.shared
-    @State private var apiKeyInput: String = ""
-    @State private var isSavedMessageShowing: Bool = false
-    @State private var isTestingConnection: Bool = false
-    @State private var connectionStatus: (success: Bool, message: String)? = nil
+    @ObservedObject var localLLM = LocalLLMService.shared
 
     public init() {}
 
@@ -19,7 +16,7 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: permissions.hasFullDiskAccess ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                            .foregroundStyle(permissions.hasFullDiskAccess ? .green : .orange)
+                            .foregroundStyle(permissions.hasFullDiskAccess ? ThingsTheme.accent : ThingsTheme.warning)
                             .font(.system(size: 16))
 
                         Text(permissions.hasFullDiskAccess ? "Full Disk Access Granted" : "Full Disk Access Recommended")
@@ -34,7 +31,7 @@ public struct SettingsView: View {
 
                     Text("Full Disk Access allows Crucial to scan and clean system-level caches, Xcode DerivedData, and orphaned application residue.")
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ThingsTheme.textSecondary)
                 }
                 .padding(.vertical, 4)
             } header: {
@@ -52,18 +49,18 @@ public struct SettingsView: View {
 
                     Text(scanner.pacingMode.subtitle)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ThingsTheme.textSecondary)
 
                     HStack {
                         Text("Live Process CPU Usage:")
                             .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(ThingsTheme.textSecondary)
                         Spacer()
                         Circle()
-                            .fill(cpuMonitor.cpuPercent > 50 ? Color.red : (cpuMonitor.cpuPercent > 15 ? Color.orange : Color.green))
+                            .fill(cpuMonitor.cpuPercent > 50 ? ThingsTheme.vitalCrimson : (cpuMonitor.cpuPercent > 15 ? ThingsTheme.starOchre : ThingsTheme.accent))
                             .frame(width: 6, height: 6)
                         Text(String(format: "%.1f%%", cpuMonitor.cpuPercent))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.system(size: 11, weight: .semibold))
                     }
                 }
                 .padding(.vertical, 4)
@@ -73,57 +70,43 @@ public struct SettingsView: View {
 
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Crucial uses Gemini to automatically analyze unknown files, explaining what created them and if deleting them is safe.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-
                     HStack {
-                        SecureField("AI API Key", text: $apiKeyInput)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12, design: .monospaced))
-
-                        Button("Save") {
-                            GeminiExplainerService.shared.setApiKey(apiKeyInput)
-                            isSavedMessageShowing = true
-                            runConnectionTest()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                isSavedMessageShowing = false
-                            }
-                        }
-                        .disabled(apiKeyInput.isEmpty)
-
-                        Button {
-                            runConnectionTest()
-                        } label: {
-                            if isTestingConnection {
-                                ProgressView()
-                                    .scaleEffect(0.6)
-                                    .frame(width: 14, height: 14)
-                            } else {
-                                Text("Test")
-                            }
-                        }
-                        .disabled(apiKeyInput.isEmpty || isTestingConnection)
+                        Image(systemName: "cpu")
+                            .font(.system(size: 14))
+                            .foregroundStyle(ThingsTheme.accent)
+                        Text("Llama 3.2 1B Instruct (Metal GPU)")
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        ThingsTag("Active", color: ThingsTheme.accent)
                     }
 
-                    if let status = connectionStatus {
-                        HStack(spacing: 5) {
-                            Image(systemName: status.success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                                .foregroundStyle(status.success ? .green : .red)
-                            Text(status.message)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(status.success ? .green : .red)
-                        }
-                        .padding(.top, 2)
-                    } else if isSavedMessageShowing {
-                        Text("API Key saved!")
+                    Text("Crucial runs an on-device local Large Language Model via Apple Silicon Metal GPU acceleration. All file telemetry synthesis, reasoning, and risk analyses occur completely offline on your Mac with zero external cloud calls.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ThingsTheme.textSecondary)
+
+                    Divider().background(ThingsTheme.borderSubtle)
+
+                    HStack {
+                        Text("Inference Engine:")
                             .font(.system(size: 11))
-                            .foregroundStyle(.green)
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                        Spacer()
+                        Text("llama.cpp · Apple Silicon Metal")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+
+                    HStack {
+                        Text("Local Model Weights:")
+                            .font(.system(size: 11))
+                            .foregroundStyle(ThingsTheme.textSecondary)
+                        Spacer()
+                        Text("Llama-3.2-1B-Instruct-Q4_K_M.gguf")
+                            .font(.system(size: 11, weight: .medium))
                     }
                 }
                 .padding(.vertical, 4)
             } header: {
-                Text("AI File Reasoning (Gemini)")
+                Text("On-Device AI Engine")
             }
 
             Section {
@@ -133,7 +116,7 @@ public struct SettingsView: View {
                             .font(.system(size: 12))
                         Spacer()
                         Text(ByteCountFormatter.string(fromByteCount: trashService.lastFreedBytes, countStyle: .file))
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .font(.system(size: 12, weight: .bold))
                     }
 
                     Button("Open macOS Trash Folder") {
@@ -146,24 +129,10 @@ public struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 360)
+        .frame(width: 480, height: 420)
         .onAppear {
-            apiKeyInput = GeminiExplainerService.shared.apiKey ?? ""
             permissions.checkPermissions()
-            if !apiKeyInput.isEmpty {
-                runConnectionTest()
-            }
-        }
-    }
-
-    private func runConnectionTest() {
-        Task {
-            isTestingConnection = true
-            let result = await GeminiExplainerService.shared.testConnection()
-            await MainActor.run {
-                self.connectionStatus = result
-                self.isTestingConnection = false
-            }
+            localLLM.checkModelStatus()
         }
     }
 }

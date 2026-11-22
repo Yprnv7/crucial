@@ -17,8 +17,8 @@ public final class CrucialChatService: ObservableObject {
             let welcome = ChatMessage(
                 sender: .assistant,
                 text: """
-                **CRUCIAL DIAGNOSTIC INTERFACE // V1.0**
-                `SYSTEM: macOS Darwin // SUBSYSTEM AUDITOR ACTIVE`
+                **Crucial Diagnostic Interface · v1.0**
+                `System: macOS Darwin · Subsystem Auditor Active`
 
                 Awaiting query or target inspection. Select any file in your storage breakdown or submit a system inquiry below.
                 """,
