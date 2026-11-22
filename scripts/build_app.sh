@@ -55,4 +55,9 @@ cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
 EOF
 
 echo "==> Done! App bundle created at: $APP_DIR"
-echo "You can run it with: open \"$APP_DIR\""
+if [ -w "/Applications" ]; then
+    echo "==> Installing to /Applications/Crucial.app..."
+    rm -rf "/Applications/$APP_NAME"
+    cp -R "$APP_DIR" "/Applications/$APP_NAME"
+fi
+echo "You can run it with: open -a Crucial"
