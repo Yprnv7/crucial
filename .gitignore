@@ -9,3 +9,5 @@ DerivedData/
 .netrc
 models/*.gguf
 bin/
+dist/
+dmg_staging/
