@@ -57,14 +57,28 @@ cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Crucial needs access to scan and clean idle developer caches, build artifacts, and junk files on your Desktop.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Crucial needs access to scan and clean idle project caches, node_modules, and build artifacts in Documents.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Crucial needs access to identify large, idle installer images (DMGs, PKGs, ZIPs) in your Downloads folder.</string>
+    <key>NSSystemAdministrationUsageDescription</key>
+    <string>Crucial needs administrative access to inspect system caches, Xcode DerivedData, and orphaned application residue.</string>
+    <key>NSFullDiskAccessUsageDescription</key>
+    <string>Crucial requires Full Disk Access to scan all junk categories, DerivedData, and orphaned application residue without prompting repeatedly.</string>
 </dict>
 </plist>
 EOF
+
+echo "==> Code-signing Crucial.app with stable ad-hoc signature..."
+codesign --force --deep --sign - "$APP_DIR"
 
 echo "==> Done! App bundle created at: $APP_DIR"
 if [ -w "/Applications" ]; then
     echo "==> Installing to /Applications/Crucial.app..."
     rm -rf "/Applications/$APP_NAME"
     cp -R "$APP_DIR" "/Applications/$APP_NAME"
+    codesign --force --deep --sign - "/Applications/$APP_NAME"
 fi
 echo "You can run it with: open -a Crucial"

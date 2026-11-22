@@ -26,5 +26,15 @@
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Crucial needs access to scan and clean idle developer caches, build artifacts, and junk files on your Desktop.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Crucial needs access to scan and clean idle project caches, node_modules, and build artifacts in Documents.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Crucial needs access to identify large, idle installer images (DMGs, PKGs, ZIPs) in your Downloads folder.</string>
+    <key>NSSystemAdministrationUsageDescription</key>
+    <string>Crucial needs administrative access to inspect system caches, Xcode DerivedData, and orphaned application residue.</string>
+    <key>NSFullDiskAccessUsageDescription</key>
+    <string>Crucial requires Full Disk Access to scan all junk categories, DerivedData, and orphaned application residue without prompting repeatedly.</string>
 </dict>
 </plist>

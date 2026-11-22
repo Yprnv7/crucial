@@ -14,22 +14,16 @@ public final class PermissionsService: ObservableObject {
 
     public func checkPermissions() {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let testPaths = [
-            home.appendingPathComponent("Library/Safari"),
-            home.appendingPathComponent("Library/Mail")
-        ]
+        let tccDB = home.appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db")
 
-        var accessGranted = false
-        for testPath in testPaths {
-            if FileManager.default.fileExists(atPath: testPath.path) {
-                if let contents = try? FileManager.default.contentsOfDirectory(atPath: testPath.path), !contents.isEmpty {
-                    accessGranted = true
-                    break
-                }
-            }
+        // In macOS, TCC.db is only readable if Full Disk Access is granted.
+        // Checking it does NOT trigger annoying system popups.
+        if let fileHandle = try? FileHandle(forReadingFrom: tccDB) {
+            try? fileHandle.close()
+            self.hasFullDiskAccess = true
+        } else {
+            self.hasFullDiskAccess = false
         }
-
-        self.hasFullDiskAccess = accessGranted
     }
 
     public func openFullDiskAccessSettings() {
