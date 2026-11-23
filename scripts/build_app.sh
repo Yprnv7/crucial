@@ -84,7 +84,8 @@ cat << 'EOF' > "$CONTENTS_DIR/Info.plist"
 </plist>
 EOF
 
-echo "==> Code-signing Crucial.app with stable ad-hoc signature..."
+echo "==> Stripping quarantine attributes & code-signing Crucial.app..."
+xattr -cr "$APP_DIR" || true
 codesign --force --deep --sign - "$APP_DIR"
 
 echo "==> Done! App bundle created at: $APP_DIR"
@@ -92,6 +93,7 @@ if [ -w "/Applications" ]; then
     echo "==> Installing to /Applications/Crucial.app..."
     rm -rf "/Applications/$APP_NAME"
     cp -R "$APP_DIR" "/Applications/$APP_NAME"
+    xattr -cr "/Applications/$APP_NAME" || true
     codesign --force --deep --sign - "/Applications/$APP_NAME"
 fi
 echo "You can run it with: open -a Crucial"

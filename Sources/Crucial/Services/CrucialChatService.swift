@@ -63,7 +63,41 @@ public final class CrucialChatService: ObservableObject {
             return
         }
 
-        // 2. Action Request: Clean Safe Files
+        // 2. File Finding & Location Intent (e.g. "CV files where ?", "where are my files", "find resume")
+        let fileSearchKeywords = extractFileSearchKeywords(from: lower)
+        if !fileSearchKeywords.isEmpty {
+            let found = await SystemFileSearchService.shared.findFiles(matchingKeywords: fileSearchKeywords, maxResults: 10)
+            if !found.isEmpty {
+                var filesList = ""
+                let home = FileManager.default.homeDirectoryForCurrentUser.path
+                for file in found.prefix(5) {
+                    let displayPath = file.path.replacingOccurrences(of: home, with: "~")
+                    let sizeStr = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
+                    filesList += "\n- 📄 **\(file.name)** (\(sizeStr))\n  `\(displayPath)`"
+                }
+
+                let remaining = found.count > 5 ? "\n\n*(+\(found.count - 5) more matching files located)*" : ""
+
+                let responseText = """
+                🔍 **Found \(found.count) matching file\(found.count == 1 ? "" : "s") on your Mac:**
+                \(filesList)\(remaining)
+
+                🛡️ **Vitality Status:** Safe User Files
+                All detected files are personal user assets and are protected by Crucial's safety guardrails.
+                """
+
+                let firstFile = found.first!
+                let reply = ChatMessage(
+                    sender: .assistant,
+                    text: responseText,
+                    suggestedAction: .revealInFinder(path: firstFile.path)
+                )
+                messages.append(reply)
+                return
+            }
+        }
+
+        // 3. Action Request: Clean Safe Files
         if lower.contains("clean safe") || lower == "clean" || lower.contains("clean all safe") || lower.contains("free up space") {
             let total = scanner.totalCleanableBytes
             if total > 0 {
@@ -346,6 +380,12 @@ public final class CrucialChatService: ObservableObject {
         case .navigateCategory(let cat):
             WindowManager.shared.openCategory(cat)
 
+        case .revealInFinder(let path):
+            NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+
+        case .inspectInFileFinder(_):
+            WindowManager.shared.navigate(to: .fileFinder)
+
         case .rescan:
             Task {
                 await scanner.scanQuickCleanDashboard()
@@ -357,5 +397,53 @@ public final class CrucialChatService: ObservableObject {
                 self.messages.append(confirmMsg)
             }
         }
+    }
+
+    private func extractFileSearchKeywords(from lower: String) -> [String] {
+        // Direct CV / Resume match
+        if lower.contains("cv") || lower.contains("resume") || lower.contains("curriculum vitae") {
+            return ["cv", "resume"]
+        }
+
+        // Keywords like "where is X", "find X", "locate X", "search for X"
+        let searchPrefixes = [
+            "where is ", "where are ", "where's ", "find ", "locate ", "search for ", "search ", "show me "
+        ]
+        for prefix in searchPrefixes {
+            if let range = lower.range(of: prefix) {
+                var term = String(lower[range.upperBound...])
+                term = term.trimmingCharacters(in: CharacterSet(charactersIn: " ?!.,;\"'"))
+                let stopwords = ["my ", "the ", "files", "file", "all ", "any "]
+                for sw in stopwords {
+                    if term.hasPrefix(sw) {
+                        term = String(term.dropFirst(sw.count)).trimmingCharacters(in: .whitespaces)
+                    }
+                    if term.hasSuffix(" " + sw.trimmingCharacters(in: .whitespaces)) {
+                        term = String(term.dropLast(sw.count)).trimmingCharacters(in: .whitespaces)
+                    }
+                }
+                term = term.trimmingCharacters(in: .whitespacesAndNewlines)
+                if term.count >= 2 {
+                    return [term]
+                }
+            }
+        }
+
+        // Suffix queries like "X files where ?" or "X where ?"
+        if lower.contains("where") {
+            let terms = lower
+                .replacingOccurrences(of: "where", with: "")
+                .replacingOccurrences(of: "files", with: "")
+                .replacingOccurrences(of: "file", with: "")
+                .replacingOccurrences(of: "are", with: "")
+                .replacingOccurrences(of: "is", with: "")
+                .replacingOccurrences(of: "my", with: "")
+                .trimmingCharacters(in: CharacterSet(charactersIn: " ?!.,;\"'"))
+            if terms.count >= 2 {
+                return [terms]
+            }
+        }
+
+        return []
     }
 }

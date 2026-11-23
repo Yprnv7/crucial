@@ -22,9 +22,56 @@ STAGING="/tmp/crucial_dmg_staging"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 
-echo "==> Staging Crucial.app and Applications shortcut..."
+echo "==> Staging Crucial.app, Applications shortcut, and Gatekeeper helper..."
 cp -R "$APP_PATH" "$STAGING/Crucial.app"
+xattr -cr "$STAGING/Crucial.app" || true
 ln -s /Applications "$STAGING/Applications"
+
+# Add one-click double-clickable installer / Gatekeeper helper script
+cat << 'EOF' > "$STAGING/Open Crucial (Bypass Gatekeeper).command"
+#!/usr/bin/env bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+echo "--------------------------------------------------------"
+echo "  Crucial macOS Installer & Gatekeeper Authorization"
+echo "--------------------------------------------------------"
+echo "==> Installing Crucial to /Applications..."
+rm -rf /Applications/Crucial.app
+cp -R "$DIR/Crucial.app" /Applications/Crucial.app
+
+echo "==> Authorizing Crucial (removing macOS quarantine)..."
+xattr -cr /Applications/Crucial.app
+
+echo "==> Launching Crucial..."
+open /Applications/Crucial.app
+
+echo "✅ Crucial is now running successfully from /Applications!"
+echo ""
+echo "Press any key to close this terminal window..."
+read -n 1 -s -r
+exit 0
+EOF
+chmod +x "$STAGING/Open Crucial (Bypass Gatekeeper).command"
+
+# Add clean instructions file
+cat << 'EOF' > "$STAGING/INSTALL_INSTRUCTIONS.txt"
+Crucial for macOS - Installation Guide
+======================================
+
+Option 1 (Easiest - 1 Click):
+Double-click "Open Crucial (Bypass Gatekeeper).command".
+It will automatically install Crucial to /Applications, clear quarantine, and open the app!
+
+Option 2 (Drag & Drop):
+1. Drag Crucial.app to the Applications folder shortcut.
+2. In Applications, Right-Click (or Control-Click) Crucial and select "Open".
+3. When the prompt asks, click "Open".
+
+If macOS Sequoia displays "Apple could not verify Crucial":
+1. Open macOS System Settings.
+2. Go to "Privacy & Security".
+3. Scroll down to "Security".
+4. Click "Open Anyway" next to Crucial.
+EOF
 
 echo "==> Building compressed DMG..."
 hdiutil create \

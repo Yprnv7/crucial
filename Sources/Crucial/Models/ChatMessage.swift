@@ -11,6 +11,8 @@ public enum ChatAction: Sendable, Equatable {
     case trashItem(url: URL, name: String, size: Int64)
     case navigateCategory(JunkCategory)
     case rescan
+    case revealInFinder(path: String)
+    case inspectInFileFinder(name: String)
 
     public var title: String {
         switch self {
@@ -24,6 +26,10 @@ public enum ChatAction: Sendable, Equatable {
             return "View \(cat.rawValue)"
         case .rescan:
             return "Rescan Mac Now"
+        case .revealInFinder:
+            return "Reveal in Finder"
+        case .inspectInFileFinder(let name):
+            return "Open '\(name)' in Deep File Finder"
         }
     }
 
@@ -31,10 +37,12 @@ public enum ChatAction: Sendable, Equatable {
         switch self {
         case .cleanAllSafe, .cleanCategory, .trashItem:
             return "trash.fill"
-        case .navigateCategory:
+        case .navigateCategory, .inspectInFileFinder:
             return "arrow.right.circle.fill"
         case .rescan:
             return "arrow.clockwise"
+        case .revealInFinder:
+            return "folder.fill"
         }
     }
 }

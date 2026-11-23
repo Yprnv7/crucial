@@ -4,15 +4,22 @@ import AppKit
 public struct FileFinderView: View {
     @ObservedObject var scanner = FileScannerService.shared
     @ObservedObject var trashService = SafetyTrashService.shared
+    @ObservedObject var searchService = SystemFileSearchService.shared
+
     @State private var searchText: String = ""
     @State private var selectedCategory: JunkCategory? = nil
     @State private var selectedItem: FileItem? = nil
     @State private var isAiExplaining: Bool = false
     @State private var statusMessage: String?
+    @State private var searchDebounceTask: Task<Void, Never>? = nil
 
     public init() {}
 
-    private var allItems: [FileItem] {
+    private var isSearchMode: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var allScannedItems: [FileItem] {
         var list: [FileItem] = []
         for (_, items) in scanner.itemsByCategory {
             list.append(contentsOf: items)
@@ -20,20 +27,19 @@ public struct FileFinderView: View {
         return list
     }
 
+    private var currentDataset: [FileItem] {
+        if isSearchMode {
+            return searchService.searchResults
+        } else {
+            return allScannedItems
+        }
+    }
+
     private var filteredItems: [FileItem] {
-        var items = allItems
+        var items = currentDataset
 
         if let selectedCategory {
             items = items.filter { $0.category == selectedCategory }
-        }
-
-        if !searchText.isEmpty {
-            let query = searchText.lowercased()
-            items = items.filter {
-                $0.name.lowercased().contains(query) ||
-                $0.path.lowercased().contains(query) ||
-                $0.category.rawValue.lowercased().contains(query)
-            }
         }
 
         return items.sorted { $0.size > $1.size }
@@ -54,7 +60,13 @@ public struct FileFinderView: View {
 
                 Divider()
 
-                fileList
+                if searchService.isSearching && filteredItems.isEmpty {
+                    searchingState
+                } else if isSearchMode && filteredItems.isEmpty && !searchService.isSearching {
+                    emptySearchState
+                } else {
+                    fileList
+                }
             }
             .frame(minWidth: 420, maxWidth: 540)
 
@@ -75,21 +87,34 @@ public struct FileFinderView: View {
                 selectItemAndExplain(first)
             }
         }
+        .onChange(of: searchText) { _, newValue in
+            performSearchDebounced(query: newValue)
+        }
     }
 
     // MARK: - Search Header
     private var searchHeader: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isSearchMode ? Color.accentColor : Color.secondary)
 
-            TextField("Search by name, path, extension, or keywords...", text: $searchText)
+            TextField("Search entire Mac (names, extensions, documents, CV, zip)...", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
+                .onSubmit {
+                    performSearchImmediate(query: searchText)
+                }
 
-            if !searchText.isEmpty {
+            if searchService.isSearching {
+                ProgressView()
+                    .scaleEffect(0.65)
+                    .frame(width: 16, height: 16)
+            } else if isSearchMode {
                 Button {
                     searchText = ""
+                    searchDebounceTask?.cancel()
+                    searchService.searchResults = []
+                    selectedItem = allScannedItems.first
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -98,14 +123,18 @@ public struct FileFinderView: View {
             }
 
             Button {
-                Task {
-                    await scanner.scanQuickCleanDashboard()
+                if isSearchMode {
+                    performSearchImmediate(query: searchText)
+                } else {
+                    Task {
+                        await scanner.scanQuickCleanDashboard()
+                    }
                 }
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(.plain)
-            .help("Rescan Files")
+            .help(isSearchMode ? "Refresh System Search" : "Rescan Detected Files")
         }
         .padding(8)
         .background(Color(NSColor.controlBackgroundColor))
@@ -116,16 +145,24 @@ public struct FileFinderView: View {
     private var categoryFilterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                filterPill(title: "All (\(allItems.count))", isSelected: selectedCategory == nil) {
+                filterPill(title: "All (\(currentDataset.count))", isSelected: selectedCategory == nil) {
                     selectedCategory = nil
                 }
 
                 ForEach(JunkCategory.allCases.filter { $0 != .custom }) { cat in
-                    let count = scanner.itemsByCategory[cat]?.count ?? 0
+                    let count = currentDataset.filter { $0.category == cat }.count
                     if count > 0 {
                         filterPill(title: "\(cat.rawValue) (\(count))", isSelected: selectedCategory == cat) {
                             selectedCategory = cat
                         }
+                    }
+                }
+
+                // If user items exist (documents, PDFs, personal data)
+                let userCount = currentDataset.filter { $0.category == .custom }.count
+                if userCount > 0 {
+                    filterPill(title: "User Documents (\(userCount))", isSelected: selectedCategory == .custom) {
+                        selectedCategory = .custom
                     }
                 }
             }
@@ -206,6 +243,35 @@ public struct FileFinderView: View {
         .padding(.vertical, 2)
         .background(level.badgeColor.opacity(0.12))
         .clipShape(Capsule())
+    }
+
+    // MARK: - Search State Views
+    private var searchingState: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("Searching entire Mac across all directories...")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptySearchState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+
+            Text("No files found matching \"\(searchText)\"")
+                .font(.system(size: 13, weight: .semibold))
+
+            Text("Try searching for broader keywords, file extensions (e.g. .pdf, .zip), or project names.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Vitality Inspector Card (Right Pane)
@@ -391,10 +457,51 @@ public struct FileFinderView: View {
         self.selectedItem = item
     }
 
+    private func performSearchDebounced(query: String) {
+        searchDebounceTask?.cancel()
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            searchService.searchResults = []
+            if selectedItem == nil || !allScannedItems.contains(where: { $0.id == selectedItem?.id }) {
+                selectedItem = allScannedItems.first
+            }
+            return
+        }
+
+        searchDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 120_000_000) // 120ms debounce
+            if !Task.isCancelled {
+                let results = await searchService.search(query: trimmed)
+                if !Task.isCancelled {
+                    if let first = results.first {
+                        selectedItem = first
+                    }
+                }
+            }
+        }
+    }
+
+    private func performSearchImmediate(query: String) {
+        searchDebounceTask?.cancel()
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        Task {
+            let results = await searchService.search(query: trimmed)
+            if let first = results.first {
+                selectedItem = first
+            }
+        }
+    }
+
     private func trashItem(_ item: FileItem) {
         do {
             try trashService.trash(item: item)
-            // Remove from list
+            // Remove from search results or scanned list
+            searchService.searchResults.removeAll { $0.url == item.url }
+            if selectedItem?.url == item.url {
+                selectedItem = filteredItems.first
+            }
             Task {
                 await scanner.scanQuickCleanDashboard()
             }
