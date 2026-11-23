@@ -138,19 +138,31 @@ Crucial/
 
 ---
 
-## 🚀 Building & Installing
+## 🚀 Installation & Building
 
-### Prerequisites
+### Download Pre-Built DMG
+1. Download [**Crucial-1.0.0-arm64.dmg**](https://github.com/Yprnv7/crucial/releases/download/v1.0.0/Crucial-1.0.0-arm64.dmg).
+2. Open the DMG and drag `Crucial.app` into `/Applications`.
+3. **First Launch on macOS Sequoia / Sonoma**:
+   Because Crucial is a free, independent open-source utility and is not signed with an Apple Developer ID ($99/year), macOS Gatekeeper displays an unverified warning on first launch:
+   - **Method A (System Settings)**: Click **Done** on the alert. Navigate to **System Settings** → **Privacy & Security**, scroll down to **Security**, and click **Open Anyway** next to *"Crucial was blocked"*. Authenticate with your Mac password or Touch ID and click **Open**.
+   - **Method B (Terminal 1-Liner)**:
+     ```bash
+     xattr -cr /Applications/Crucial.app
+     open /Applications/Crucial.app
+     ```
+
+### Build from Source
+**Prerequisites**:
 - macOS 14.0 (Sonoma) or macOS 15.0 (Sequoia)
 - Xcode 15+ / Swift 5.9+ command-line tools
 
-### Build from Source
 ```bash
 # Clone the repository
 git clone https://github.com/Yprnv7/crucial.git
 cd crucial
 
-# Compile and package Crucial.app
+# Compile, code-sign and package Crucial.app
 ./scripts/build_app.sh
 
 # Launch the application

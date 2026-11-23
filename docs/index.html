@@ -538,6 +538,21 @@
               Yes, 100%. The full source code is publicly audited and licensed under the permissive MIT license on GitHub. There are no paywalls, subscriptions, or "pro" tiers.
             </div>
           </div>
+
+          <div class="faq-item">
+            <button class="faq-question">
+              <span>Why does macOS say "Apple could not verify Crucial is free of malware"?</span>
+              <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="faq-answer">
+              Crucial is an independent, 100% free open-source project and is not signed with an Apple Developer Program commercial certificate ($99/year). On macOS Sequoia and Sonoma, Apple Gatekeeper displays this notice for any unnotarized internet download.<br><br>
+              <strong>How to open it (one-time setup):</strong><br>
+              1. Click <strong>Done</strong> on the alert dialog.<br>
+              2. Open macOS <strong>System Settings</strong> &rarr; <strong>Privacy &amp; Security</strong> and scroll down to the <strong>Security</strong> section.<br>
+              3. Click <strong>Open Anyway</strong> next to <em>"Crucial was blocked"</em>, enter your Touch ID or Mac password, and click <strong>Open</strong>.<br><br>
+              <em>Or via Terminal:</em> Run <code>xattr -cr /Applications/Crucial.app</code> after dragging Crucial to Applications.
+            </div>
+          </div>
         </div>
       </div>
     </section>
