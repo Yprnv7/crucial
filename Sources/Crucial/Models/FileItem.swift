@@ -46,6 +46,19 @@ public struct FileItem: Identifiable, Hashable, Equatable, Sendable {
         ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
+    public var fileTypeCategory: FileTypeCategory {
+        FileTypeCategory.categorize(url: url)
+    }
+
+    public var fileExtension: String {
+        let ext = url.pathExtension.uppercased()
+        return ext.isEmpty ? (isDirectory ? "DIR" : "FILE") : ext
+    }
+
+    public var formatDescription: String {
+        FileTypeCategory.formatDescription(for: url.pathExtension)
+    }
+
     @MainActor
     public var icon: NSImage {
         NSWorkspace.shared.icon(forFile: path)

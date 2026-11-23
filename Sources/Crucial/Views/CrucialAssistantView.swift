@@ -231,6 +231,77 @@ public struct CrucialAssistantView: View {
                         .foregroundStyle(ThingsTheme.textPrimary)
                         .textSelection(.enabled)
 
+                    // Matched Files List (Interactive file cards with direct Finder buttons)
+                    if !msg.matchedFiles.isEmpty {
+                        Divider().background(ThingsTheme.borderSubtle)
+                            .padding(.vertical, 2)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("LOCATED FILES (\(msg.matchedFiles.count))")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(ThingsTheme.textTertiary)
+                                .tracking(0.5)
+
+                            ForEach(msg.matchedFiles) { file in
+                                HStack(spacing: 8) {
+                                    Image(nsImage: file.icon)
+                                        .resizable()
+                                        .frame(width: 22, height: 22)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(file.name)
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundStyle(ThingsTheme.textPrimary)
+                                                .lineLimit(1)
+
+                                            Text(file.fileExtension)
+                                                .font(.system(size: 9, weight: .bold))
+                                                .padding(.horizontal, 4)
+                                                .padding(.vertical, 1)
+                                                .background(file.fileTypeCategory.color.opacity(0.15))
+                                                .foregroundStyle(file.fileTypeCategory.color)
+                                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                                        }
+
+                                        Text(file.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundStyle(ThingsTheme.textTertiary)
+                                            .lineLimit(1)
+                                    }
+
+                                    Spacer()
+
+                                    Text(file.formattedSize)
+                                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                        .foregroundStyle(ThingsTheme.textSecondary)
+
+                                    Button {
+                                        FinderOpener.reveal(path: file.path)
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "folder")
+                                                .font(.system(size: 10))
+                                            Text("Reveal")
+                                                .font(.system(size: 10, weight: .semibold))
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(ThingsTheme.cardRaised)
+                                        .foregroundStyle(ThingsTheme.accent)
+                                        .clipShape(Capsule())
+                                        .overlay(Capsule().strokeBorder(ThingsTheme.border, lineWidth: 1))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Reveal in Finder")
+                                }
+                                .padding(8)
+                                .background(ThingsTheme.canvas.opacity(0.6))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
+
                     // Suggested Actions
                     if let action = msg.suggestedAction, !msg.isActionExecuted {
                         Divider().background(ThingsTheme.borderSubtle)
@@ -238,10 +309,18 @@ public struct CrucialAssistantView: View {
 
                         HStack(spacing: 8) {
                             Button {
-                                actionToConfirm = (action: action, messageId: msg.id)
+                                switch action {
+                                case .revealInFinder(let path):
+                                    FinderOpener.reveal(path: path)
+                                    chatService.executeAction(action, for: msg.id)
+                                case .inspectInFileFinder:
+                                    chatService.executeAction(action, for: msg.id)
+                                default:
+                                    actionToConfirm = (action: action, messageId: msg.id)
+                                }
                             } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "sparkles")
+                                    Image(systemName: action.iconName)
                                         .font(.system(size: 11, weight: .bold))
                                     Text(action.title)
                                         .font(.system(size: 11, weight: .semibold))

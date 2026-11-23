@@ -63,33 +63,45 @@ public final class CrucialChatService: ObservableObject {
             return
         }
 
-        // 2. File Finding & Location Intent (e.g. "CV files where ?", "where are my files", "find resume")
+        // 2. File Finding & Location Intent (e.g. "CV files where ?", "show all files with CV in name", "where are my files", "find resume")
         let fileSearchKeywords = extractFileSearchKeywords(from: lower)
         if !fileSearchKeywords.isEmpty {
-            let found = await SystemFileSearchService.shared.findFiles(matchingKeywords: fileSearchKeywords, maxResults: 10)
+            let found = await SystemFileSearchService.shared.findFiles(matchingKeywords: fileSearchKeywords, maxResults: 150)
             if !found.isEmpty {
-                var filesList = ""
                 let home = FileManager.default.homeDirectoryForCurrentUser.path
-                for file in found.prefix(5) {
-                    let displayPath = file.path.replacingOccurrences(of: home, with: "~")
-                    let sizeStr = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
-                    filesList += "\n- 📄 **\(file.name)** (\(sizeStr))\n  `\(displayPath)`"
+                let userFiles = found.filter { $0.path.hasPrefix(home) }
+                let systemFiles = found.filter { !$0.path.hasPrefix(home) }
+
+                var text = "📂 **Found \(found.count) matching file\(found.count == 1 ? "" : "s") on your Mac:**\n"
+
+                if !userFiles.isEmpty {
+                    text += "\n### 👤 Personal User Files (\(userFiles.count))\n"
+                    for file in userFiles {
+                        let displayPath = file.path.replacingOccurrences(of: home, with: "~")
+                        let sizeStr = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
+                        text += "- **\(file.name)** (\(sizeStr))\n  `\(displayPath)` · *\(file.fileTypeCategory.rawValue)*\n"
+                    }
                 }
 
-                let remaining = found.count > 5 ? "\n\n*(+\(found.count - 5) more matching files located)*" : ""
+                if !systemFiles.isEmpty {
+                    text += "\n### ⚙️ macOS System & Framework Files (\(systemFiles.count))\n"
+                    for file in systemFiles {
+                        let sizeStr = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
+                        text += "- `\(file.path)` (\(sizeStr))\n"
+                    }
+                }
 
-                let responseText = """
-                🔍 **Found \(found.count) matching file\(found.count == 1 ? "" : "s") on your Mac:**
-                \(filesList)\(remaining)
-
-                🛡️ **Vitality Status:** Safe User Files
-                All detected files are personal user assets and are protected by Crucial's safety guardrails.
-                """
+                if !userFiles.isEmpty {
+                    text += "\n🛡️ **Vitality Status:** User documents are safe personal assets with zero deletion risk."
+                } else {
+                    text += "\n🔒 **Vitality Status:** System-level files protected by macOS System Integrity Protection."
+                }
 
                 let firstFile = found.first!
                 let reply = ChatMessage(
                     sender: .assistant,
-                    text: responseText,
+                    text: text,
+                    matchedFiles: found,
                     suggestedAction: .revealInFinder(path: firstFile.path)
                 )
                 messages.append(reply)
@@ -381,9 +393,10 @@ public final class CrucialChatService: ObservableObject {
             WindowManager.shared.openCategory(cat)
 
         case .revealInFinder(let path):
-            NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+            FinderOpener.reveal(path: path)
 
-        case .inspectInFileFinder(_):
+        case .inspectInFileFinder(let name):
+            WindowManager.shared.activeSearchQuery = name
             WindowManager.shared.navigate(to: .fileFinder)
 
         case .rescan:
@@ -405,13 +418,15 @@ public final class CrucialChatService: ObservableObject {
             return ["cv", "resume"]
         }
 
-        // Keywords like "where is X", "find X", "locate X", "search for X"
+        // Keywords like "show all files with X in name", "files with X in name", "where is X", "find X"
         let searchPrefixes = [
+            "show all files with ", "show files with ", "files with ", "show all ",
             "where is ", "where are ", "where's ", "find ", "locate ", "search for ", "search ", "show me "
         ]
         for prefix in searchPrefixes {
             if let range = lower.range(of: prefix) {
                 var term = String(lower[range.upperBound...])
+                term = term.replacingOccurrences(of: "in name", with: "")
                 term = term.trimmingCharacters(in: CharacterSet(charactersIn: " ?!.,;\"'"))
                 let stopwords = ["my ", "the ", "files", "file", "all ", "any "]
                 for sw in stopwords {

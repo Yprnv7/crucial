@@ -12,8 +12,8 @@ public final class SystemFileSearchService: ObservableObject {
     private init() {}
 
     /// Performs a high-speed system-wide search across the Mac using native macOS Spotlight (mdfind)
-    /// with direct filesystem fallback for instant results.
-    public func search(query: String, maxResults: Int = 150) async -> [FileItem] {
+    /// with direct filesystem fallback and intelligent relevance ranking.
+    public func search(query: String, maxResults: Int = 300) async -> [FileItem] {
         let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanQuery.isEmpty else {
             self.searchResults = []
@@ -25,11 +25,43 @@ public final class SystemFileSearchService: ObservableObject {
         self.isSearching = true
         self.lastQuery = cleanQuery
 
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+
         let results = await Task.detached(priority: .userInitiated) { () -> [FileItem] in
             var matchedPaths: [String] = []
             var seenPaths: Set<String> = []
 
-            // 1. Run mdfind for fast spotlight matches
+            // 1. Prioritized Direct Crawl of Primary User Directories first (instant user files)
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            let targetDirs = [
+                home.appendingPathComponent("Desktop"),
+                home.appendingPathComponent("Documents"),
+                home.appendingPathComponent("Downloads"),
+                home.appendingPathComponent("Movies"),
+                home.appendingPathComponent("Music"),
+                home.appendingPathComponent("Pictures")
+            ]
+
+            let lowerQ = cleanQuery.lowercased()
+            for dir in targetDirs {
+                guard let contents = try? FileManager.default.contentsOfDirectory(
+                    at: dir,
+                    includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey],
+                    options: [.skipsHiddenFiles]
+                ) else { continue }
+
+                for fileURL in contents {
+                    let filename = fileURL.lastPathComponent.lowercased()
+                    if filename.contains(lowerQ) {
+                        if !seenPaths.contains(fileURL.path) {
+                            seenPaths.insert(fileURL.path)
+                            matchedPaths.append(fileURL.path)
+                        }
+                    }
+                }
+            }
+
+            // 2. Run mdfind for Spotlight matches across the entire Mac
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
             process.arguments = ["-name", cleanQuery]
@@ -54,42 +86,10 @@ public final class SystemFileSearchService: ObservableObject {
                     }
                 }
             } catch {
-                // If mdfind fails or times out, proceed to user folder fallback
+                // Spotlight fallback
             }
 
-            // 2. Direct fast crawl of primary user directories if mdfind has few results
-            if matchedPaths.count < 10 {
-                let home = FileManager.default.homeDirectoryForCurrentUser
-                let targetDirs = [
-                    home.appendingPathComponent("Desktop"),
-                    home.appendingPathComponent("Documents"),
-                    home.appendingPathComponent("Downloads"),
-                    home.appendingPathComponent("Movies"),
-                    home.appendingPathComponent("Music")
-                ]
-
-                let lowerQ = cleanQuery.lowercased()
-                for dir in targetDirs {
-                    guard let contents = try? FileManager.default.contentsOfDirectory(
-                        at: dir,
-                        includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey, .contentModificationDateKey],
-                        options: [.skipsHiddenFiles]
-                    ) else { continue }
-
-                    for fileURL in contents {
-                        if fileURL.lastPathComponent.lowercased().contains(lowerQ) {
-                            if !seenPaths.contains(fileURL.path) {
-                                seenPaths.insert(fileURL.path)
-                                matchedPaths.append(fileURL.path)
-                                if matchedPaths.count >= maxResults { break }
-                            }
-                        }
-                    }
-                    if matchedPaths.count >= maxResults { break }
-                }
-            }
-
-            // 3. Convert matched paths to rich FileItem models
+            // 3. Convert matched paths to rich FileItem models with vitality assessment
             var items: [FileItem] = []
             let fm = FileManager.default
 
@@ -125,8 +125,18 @@ public final class SystemFileSearchService: ObservableObject {
                 items.append(item)
             }
 
-            // Sort by size descending
-            return items.sorted { $0.size > $1.size }
+            // 4. Intelligent Relevance Sorting:
+            // - User workspace files (Desktop, Documents, Downloads) ranked HIGHEST
+            // - Standalone keyword/token matches ranked over accidental substring in system files
+            // - System / Library files placed at bottom
+            return items.sorted { a, b in
+                let scoreA = computeRelevanceScore(item: a, query: lowerQ, homeDir: homeDir)
+                let scoreB = computeRelevanceScore(item: b, query: lowerQ, homeDir: homeDir)
+                if scoreA != scoreB {
+                    return scoreA > scoreB
+                }
+                return a.size > b.size
+            }
         }.value
 
         self.searchResults = results
@@ -135,7 +145,7 @@ public final class SystemFileSearchService: ObservableObject {
     }
 
     /// Fast categorized search for specific intent (e.g. CV, Resume, Videos, Documents)
-    public func findFiles(matchingKeywords keywords: [String], maxResults: Int = 50) async -> [FileItem] {
+    public func findFiles(matchingKeywords keywords: [String], maxResults: Int = 100) async -> [FileItem] {
         var allFound: [FileItem] = []
         var seenPaths: Set<String> = []
 
@@ -147,14 +157,78 @@ public final class SystemFileSearchService: ObservableObject {
                     allFound.append(item)
                 }
             }
-            if allFound.count >= maxResults { break }
         }
 
-        return allFound.sorted { $0.size > $1.size }
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+        return allFound.sorted { a, b in
+            let scoreA = computeRelevanceScore(item: a, query: keywords.first?.lowercased() ?? "", homeDir: homeDir)
+            let scoreB = computeRelevanceScore(item: b, query: keywords.first?.lowercased() ?? "", homeDir: homeDir)
+            if scoreA != scoreB {
+                return scoreA > scoreB
+            }
+            return a.size > b.size
+        }
     }
 }
 
 // MARK: - Non-isolated Search Utilities
+private func computeRelevanceScore(item: FileItem, query: String, homeDir: String) -> Int {
+    var score = 0
+    let path = item.path.lowercased()
+    let name = item.name.lowercased()
+
+    // 1. User Directory Priority (+10,000 for top user folders)
+    if path.hasPrefix(homeDir + "/desktop") || path.hasPrefix(homeDir + "/documents") || path.hasPrefix(homeDir + "/downloads") {
+        score += 10000
+    } else if path.hasPrefix(homeDir) {
+        score += 5000
+    }
+
+    // 2. Penalty for internal System and Library paths
+    if path.hasPrefix("/system") || path.hasPrefix("/library") || path.hasPrefix("/private") || path.hasPrefix("/usr") {
+        score -= 8000
+    }
+
+    // 3. Exact word boundary / token match (e.g. "cv" surrounded by spaces, dashes, or dots)
+    let tokenMatches = ["_\(query).", "-\(query).", " \(query).", "_\(query)_", "-\(query)-", " \(query) "]
+    for token in tokenMatches {
+        if name.contains(token) {
+            score += 4000
+            break
+        }
+    }
+
+    if name.starts(with: query) {
+        score += 2000
+    }
+
+    // 4. File Type Boost (documents, pdfs, images vs framework binaries)
+    switch item.fileTypeCategory {
+    case .documents:
+        score += 1500
+    case .images, .media:
+        score += 1000
+    case .archives:
+        score += 800
+    case .developer:
+        score += 500
+    case .system, .other:
+        break
+    case .all:
+        break
+    }
+
+    // 5. Recency
+    if let mod = item.modificationDate {
+        let daysAgo = Calendar.current.dateComponents([.day], from: mod, to: Date()).day ?? 1000
+        if daysAgo < 30 {
+            score += 500
+        }
+    }
+
+    return score
+}
+
 private func categorizeFile(url: URL) -> JunkCategory {
     let path = url.path.lowercased()
     let ext = url.pathExtension.lowercased()

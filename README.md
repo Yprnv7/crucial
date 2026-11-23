@@ -61,25 +61,41 @@ Most Mac cleaning applications suffer from two extremes:
 - **2.1+ GB/s Throughput**: Hardware-accelerated hashing on Apple Silicon.
 - **Single-Click Purge**: Automatically preserves original master copies and stages redundant duplicates into Trash.
 
-### 4. 📊 Storage Sunburst Treemap
-- **Radial Hierarchical Visualization**: Concentric ring visualizer showing folder distribution across your disk.
-- **Breadcrumb Navigation**: Zoom in and out of nested directories smoothly with hover tooltips and category color coding.
+### 4. 📊 Storage Treemap & Whole SSD Hardware Vitals
+- **Whole SSD Capacity Map**: Color-coded proportional pie and donut visualization of your entire Mac drive (Free space, Applications, macOS Sealed System, User Documents, Media, Developer Caches, and Cleanable Bloat).
+- **Live S.M.A.R.T. Telemetry**: Direct APFS container health audit, verified S.M.A.R.T. status, TRIM garbage collection status, and storage wear diagnostics.
+- **Dual Treemap Modes**: Seamless toggle between Whole SSD Allocation and Cleanable Bloat Sectors with mathematically balanced, zero-error percentage indexing.
 
-### 5. 🛠️ System Maintenance & APFS Optimization
+### 5. 🔍 Deep File Finder & Universal File Categorization
+- **System-Wide Spotlight Indexing**: Combines native `mdfind` with high-speed filesystem crawling across user spaces and deep directory trees.
+- **Universal Multi-Format Categorization**: Comprehensive classification for all file types:
+  - **Documents & PDFs**: `.pdf`, `.docx`, `.pages`, `.txt`, `.xlsx`, `.md`, `.rtf`, etc.
+  - **Images & Photos**: `.jpg`, `.png`, `.webp`, `.heic`, `.svg`, `.psd`, `.ai`, etc.
+  - **Audio & Video**: `.mp4`, `.mov`, `.mkv`, `.mp3`, `.wav`, `.m4a`, etc.
+  - **Archives & Packages**: `.zip`, `.dmg`, `.pkg`, `.tar`, `.gz`, `.7z`, etc.
+  - **Developer & Code**: `.swift`, `.py`, `.ts`, `.js`, `.c`, `.cpp`, `.rs`, `.go`, etc.
+  - **System & Caches**: `.cache`, `.log`, `.plist`, `.dylib`, etc.
+- **Multi-Select Batch Actions**: Select-all toggle and row checkboxes with batch "Move to Trash" and "Reveal in Finder" actions.
+- **Format Documentation**: Inspects and documents exact MIME / UTI metadata and vitality levels for every file format.
+
+### 6. 🧠 Crucial Assistant & Storage Intelligence
+- **Intelligent Query Intent Dispatcher**: Submit queries like `"CV files where ?"` or `"show all files with CV in name"`. Crucial Assistant actively locates your files, prioritizes user directories over system libraries, and provides direct 1-click **"Reveal in Finder"** buttons.
+- **Triple-Redundancy Finder Reveal**: Features `FinderOpener` with AppKit file viewer selection, `/usr/bin/open -R`, and Finder window activation to ensure Finder windows open reliably on macOS Sonoma & Sequoia.
+- **Zero-Error Architecture**: Built-in deterministic technical knowledge engine streams rich macOS systems engineering answers smoothly even when unbundled.
+
+### 7. ⚡ Unified Sidebar Quick Search
+- Top search input instantly drives Deep File Finder across your Mac, synchronizing queries and filtering results in real time.
+
+### 8. 🛠️ System Maintenance & APFS Optimization
 - **APFS Snapshot Thinning**: Safely trims orphaned Time Machine local snapshots via `tmutil thinlocalsnapshots` to reclaim gigabytes of purgeable space.
 - **DNS Cache Flushing**: Instantly clears stale DNS resolution caches and restarts `mDNSResponder`.
 - **Kernel Purgeable Memory Flush**: Reclaims cached inactive RAM under gentle kernel memory pressure.
 
-### 6. 🚀 Startup Daemons & LaunchAgents Manager
-- Inspect and toggle login items across:
-  - User LaunchAgents (`~/Library/LaunchAgents`)
-  - System LaunchAgents (`/Library/LaunchAgents`)
-  - System LaunchDaemons (`/Library/LaunchDaemons`)
-- Disable startup bloat without modifying system plist integrity.
+### 9. 🚀 Startup Daemons & LaunchAgents Manager
+- Inspect and toggle login items across User LaunchAgents, System LaunchAgents, and System LaunchDaemons.
 
-### 7. ⚡ Action-First Menu Bar Companion
-- Lives subtly in your macOS menu bar (`MenuBarExtra`).
-- Live Macintosh HD capacity gauge, RAM usage meter, and 1-click quick cache cleaner.
+### 10. ⚡ Action-First Menu Bar Companion
+- Lives subtly in your macOS menu bar (`MenuBarExtra`) with live storage gauges, RAM meters, and quick cache cleaning.
 
 ---
 

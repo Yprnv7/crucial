@@ -67,6 +67,15 @@ public struct MainWindowView: View {
                 autoSelectFirstItem()
             }
         }
+        .onChange(of: searchText) { _, newQ in
+            let trimmed = newQ.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                windowManager.activeSearchQuery = trimmed
+                if windowManager.selectedNav != .fileFinder {
+                    windowManager.selectedNav = .fileFinder
+                }
+            }
+        }
         .alert(isPresented: $showingTrashAlert) {
             let info = scanner.getSelectedCountAndBytes()
             return Alert(
@@ -153,10 +162,18 @@ public struct MainWindowView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 11))
                     .foregroundStyle(ThingsTheme.textPrimary)
+                    .onSubmit {
+                        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            windowManager.activeSearchQuery = trimmed
+                            windowManager.selectedNav = .fileFinder
+                        }
+                    }
 
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
+                        windowManager.activeSearchQuery = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 11))
@@ -696,7 +713,7 @@ public struct MainWindowView: View {
                                     .tag(item)
                                     .contextMenu {
                                         Button("Reveal in Finder") {
-                                            NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+                                            FinderOpener.reveal(path: item.path)
                                         }
                                         Button("Ask Crucial Assistant") {
                                             CrucialChatService.shared.askAbout(item: item)
@@ -950,7 +967,7 @@ public struct MainWindowView: View {
                     Spacer()
 
                     Button {
-                        NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+                        FinderOpener.reveal(path: item.path)
                     } label: {
                         Image(systemName: "arrow.up.right.square")
                             .font(.system(size: 14))
@@ -1128,7 +1145,7 @@ public struct MainWindowView: View {
 
                     HStack(spacing: 8) {
                         Button {
-                            NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+                            FinderOpener.reveal(path: item.path)
                         } label: {
                             Text("Reveal in Finder")
                                 .font(.system(size: 11, weight: .medium))

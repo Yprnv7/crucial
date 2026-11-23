@@ -7,6 +7,7 @@ public final class WindowManager: ObservableObject {
 
     @Published public var selectedNav: CrucialNavSection = .dashboard
     @Published public var selectedItem: FileItem? = nil
+    @Published public var activeSearchQuery: String = ""
 
     private var mainWindow: NSWindow?
     private var settingsWindow: NSWindow?

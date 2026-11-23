@@ -53,6 +53,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
     public var text: String
     public let timestamp: Date
     public let contextItem: FileItem?
+    public var matchedFiles: [FileItem]
     public var suggestedAction: ChatAction?
     public var isActionExecuted: Bool
 
@@ -62,6 +63,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
         text: String,
         timestamp: Date = Date(),
         contextItem: FileItem? = nil,
+        matchedFiles: [FileItem] = [],
         suggestedAction: ChatAction? = nil,
         isActionExecuted: Bool = false
     ) {
@@ -70,6 +72,7 @@ public struct ChatMessage: Identifiable, Sendable, Equatable {
         self.text = text
         self.timestamp = timestamp
         self.contextItem = contextItem
+        self.matchedFiles = matchedFiles
         self.suggestedAction = suggestedAction
         self.isActionExecuted = isActionExecuted
     }

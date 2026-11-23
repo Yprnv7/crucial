@@ -537,7 +537,7 @@ public struct AppUninstallerView: View {
             // Action Footer
             HStack {
                 Button {
-                    NSWorkspace.shared.selectFile(app.bundleURL.path, inFileViewerRootedAtPath: "")
+                    FinderOpener.reveal(path: app.bundleURL.path)
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "folder")
@@ -693,7 +693,7 @@ public struct AppUninstallerView: View {
             Spacer()
 
             Button {
-                NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+                FinderOpener.reveal(path: item.path)
             } label: {
                 Image(systemName: "arrow.up.forward.app")
                     .font(.system(size: 10))

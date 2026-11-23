@@ -196,7 +196,7 @@ public struct DuplicatesView: View {
                 Spacer()
 
                 Button {
-                    NSWorkspace.shared.selectFile(group.original.path, inFileViewerRootedAtPath: "")
+                    FinderOpener.reveal(path: group.original.path)
                 } label: {
                     Image(systemName: "arrow.up.right.square")
                         .font(.system(size: 11))
@@ -224,7 +224,7 @@ public struct DuplicatesView: View {
                         Spacer()
 
                         Button {
-                            NSWorkspace.shared.selectFile(dup.path, inFileViewerRootedAtPath: "")
+                            FinderOpener.reveal(path: dup.path)
                         } label: {
                             Image(systemName: "arrow.up.right.square")
                                 .font(.system(size: 11))
