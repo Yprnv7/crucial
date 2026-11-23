@@ -7,6 +7,8 @@
 [![Apple Silicon](https://img.shields.io/badge/Architecture-Apple%20Silicon%20(Metal)-blue?style=flat-square)](https://developer.apple.com/metal/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&style=flat-square)](https://swift.org)
 [![Local LLM](https://img.shields.io/badge/Local%20AI-Llama%203.2%201B%20(Metal)-0DA687?style=flat-square)](https://llama.meta.com/)
+[![Website](https://img.shields.io/badge/Website-yprnv7.github.io%2Fcrucial-0DA687?style=flat-square)](https://yprnv7.github.io/crucial/)
+[![Download DMG](https://img.shields.io/badge/Download-Crucial--1.0.0--arm64.dmg-F59E1A?style=flat-square)](https://github.com/Yprnv7/crucial/releases/download/v1.0.0/Crucial-1.0.0-arm64.dmg)
 [![License](https://img.shields.io/badge/License-MIT-gray?style=flat-square)](LICENSE)
 
 ---
