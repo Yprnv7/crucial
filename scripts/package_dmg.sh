@@ -24,7 +24,9 @@ mkdir -p "$STAGING"
 
 echo "==> Staging Crucial.app, Applications shortcut, and Gatekeeper helper..."
 cp -R "$APP_PATH" "$STAGING/Crucial.app"
+find "$STAGING/Crucial.app/Contents/Resources/models" -type l -delete 2>/dev/null || true
 xattr -cr "$STAGING/Crucial.app" || true
+codesign --force --deep --sign - "$STAGING/Crucial.app"
 ln -s /Applications "$STAGING/Applications"
 
 # Add one-click double-clickable installer / Gatekeeper helper script
@@ -44,7 +46,7 @@ xattr -cr /Applications/Crucial.app
 echo "==> Launching Crucial..."
 open /Applications/Crucial.app
 
-echo "✅ Crucial is now running successfully from /Applications!"
+echo "Crucial is now running from /Applications."
 echo ""
 echo "Press any key to close this terminal window..."
 read -n 1 -s -r
